@@ -1,0 +1,65 @@
+# Producción (Coolify → "Docker Compose"). Variables: ver .env.example
+# Orden: db → init (roles + migraciones, idempotente en cada despliegue) → api
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-checador}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD}
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Paso único por despliegue: crea/actualiza roles (requiere superusuario) y aplica migraciones (como `migrator`).
+  init:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+    command: ["sh", "-c", "node dist/src/cli/bootstrap.js && node dist/src/cli/migrate.js && node dist/src/cli/check-tenancy.js"]
+    environment:
+      BOOTSTRAP_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-checador}
+      MIGRATOR_DATABASE_URL: postgresql://migrator:${MIGRATOR_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
+      MIGRATOR_PASSWORD: ${MIGRATOR_PASSWORD:?}
+      APP_USER_PASSWORD: ${APP_USER_PASSWORD:?}
+      PLATFORM_OPS_PASSWORD: ${PLATFORM_OPS_PASSWORD:?}
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    depends_on:
+      init: { condition: service_completed_successfully }
+    environment:
+      # La API usa SOLO app_user (NOBYPASSRLS). No recibe credenciales de plataforma ni de superusuario.
+      DATABASE_URL: postgresql://app_user:${APP_USER_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
+      PIN_PEPPER: ${PIN_PEPPER:?define PIN_PEPPER (>= 32 caracteres)}
+      PORT: ${PORT:-3000}
+      TZ: UTC
+    expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Herramienta de operación (NO arranca sola):
+  #   docker compose --profile tools run --rm platform create-organization --name Fatboy --slug fatboy --timezone America/Tijuana ...
+  platform:
+    profiles: ["tools"]
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    depends_on:
+      init: { condition: service_completed_successfully }
+    entrypoint: ["node", "dist/src/cli/platform.js"]
+    environment:
+      PLATFORM_DATABASE_URL: postgresql://platform_ops:${PLATFORM_OPS_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
+
+volumes:
+  pgdata:

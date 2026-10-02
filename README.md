@@ -1,18 +1,28 @@
 # Sistema de empleados — módulo Reloj Checador (plataforma multi-negocio)
 
-Plataforma para control de asistencia de negocios con varias sucursales: kiosco con PIN, horarios rotativos, turnos nocturnos, incidencias, correcciones auditadas, tablero en tiempo real y reportes. Diseñada como **multi-tenant** desde el inicio (Plataforma → Negocio → Sucursales → Empleados) y como el primer módulo de un sistema de empleados más amplio. **Fatboy es el primer negocio (tenant).**
+Plataforma para control de asistencia de negocios con varias sucursales: kiosco con PIN, horarios rotativos, turnos nocturnos, incidencias, correcciones auditadas, tablero en tiempo real y reportes. **Multi-tenant desde el inicio** (Plataforma → Negocio → Sucursales → Empleados) y primer módulo de un sistema de empleados más amplio. **Fatboy es el primer negocio (tenant).**
 
-**Estado:** fase de diseño (aún sin código).
+**Estado:** reglas v1.0 y modelo v1.0 **congelados** · **Fase 0 implementada y probada** (fundaciones multi-tenant). Siguiente: Fase 1.
 
-## Documentación de diseño
+## Documentación
 
 | Documento | Contenido |
 |---|---|
-| [`docs/00-decisiones-pendientes.md`](docs/00-decisiones-pendientes.md) | Decisiones resueltas y pendientes |
-| [`docs/01-reglas-de-negocio.md`](docs/01-reglas-de-negocio.md) | Reglas de negocio numeradas (RN-xxx) |
-| [`docs/02-modelo-de-datos.md`](docs/02-modelo-de-datos.md) | Modelo PostgreSQL, aislamiento por negocio (RLS) y casos difíciles |
-| [`docs/03-arquitectura.md`](docs/03-arquitectura.md) | Stack, multi-tenancy, seguridad, despliegue en Coolify y fases |
+| [`docs/00-decisiones.md`](docs/00-decisiones.md) | Registro de decisiones (D-1 … D-20) |
+| [`docs/01-reglas-de-negocio.md`](docs/01-reglas-de-negocio.md) | Reglas de negocio v1.0 (RN-xxx) |
+| [`docs/02-modelo-de-datos.md`](docs/02-modelo-de-datos.md) | Modelo PostgreSQL v1.0, aislamiento por negocio (RLS) |
+| [`docs/03-arquitectura.md`](docs/03-arquitectura.md) | Arquitectura v1.0, seguridad, despliegue, fases |
+| [`docs/04-operacion.md`](docs/04-operacion.md) | Operación: desarrollo, despliegue en Coolify, checklist de tablas nuevas |
 
-## Stack propuesto
+## Stack
 
-TypeScript · Next.js (kiosco + panel) · NestJS (API) · PostgreSQL con RLS · Drizzle · Docker Compose · Coolify.
+TypeScript · NestJS · PostgreSQL 16 (RLS) · Drizzle ORM + migraciones SQL · Zod · Vitest · Docker Compose · Coolify. Frontend (Next.js) desde la Fase 1.
+
+## Comandos
+
+```bash
+pnpm install
+pnpm typecheck && pnpm build
+pnpm test              # pruebas contra PostgreSQL real (aislamiento, RLS, PIN, kioscos, políticas...)
+pnpm check:tenancy     # lo que ejecuta CI: toda tabla multi-tenant debe estar protegida
+```

@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Pruebas: crean su propia base `checador_test`, los roles y aplican TODAS las migraciones
+      TEST_PG_HOST: localhost
+      TEST_PG_SUPERPASSWORD: postgres
+      # Verificación de despliegue (mismo flujo que Coolify): bootstrap → migrate → check:tenancy
+      BOOTSTRAP_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/checador_ci
+      MIGRATOR_DATABASE_URL: postgresql://migrator:ci-migrator@localhost:5432/checador_ci
+      MIGRATOR_PASSWORD: ci-migrator
+      APP_USER_PASSWORD: ci-app-user
+      PLATFORM_OPS_PASSWORD: ci-platform-ops
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build
+        run: pnpm build
+
+      - name: Migraciones desde cero + verificación de aislamiento multi-tenant
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE checador_ci"
+          pnpm db:bootstrap
+          pnpm db:migrate
+          # Falla el pipeline si alguna tabla multi-tenant no tiene organization_id + RLS forzado + política
+          pnpm check:tenancy
+
+      - name: Pruebas (incluye aislamiento A↔B de lectura/escritura y detección de tablas sin protección)
+        run: pnpm test
+
+      - name: Smoke de arranque de la API (compilada)
+        env:
+          DATABASE_URL: postgresql://app_user:ci-app-user@localhost:5432/checador_ci
+          PIN_PEPPER: ci-pepper-ci-pepper-ci-pepper-ci-pepper-1234
+          PORT: "3000"
+        run: |
+          node apps/api/dist/src/main.js &
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:3000/health && exit 0; sleep 1; done
+          echo "La API no respondió /health" && exit 1

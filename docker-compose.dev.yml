@@ -1,0 +1,15 @@
+# Desarrollo local: solo PostgreSQL. La API/CLI se ejecutan con pnpm en el host.
+#   docker compose -f docker-compose.dev.yml up -d
+#   export BOOTSTRAP_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/checador MIGRATOR_PASSWORD=m APP_USER_PASSWORD=a PLATFORM_OPS_PASSWORD=p
+#   pnpm db:bootstrap && MIGRATOR_DATABASE_URL=postgresql://migrator:m@localhost:5432/checador pnpm db:migrate
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: checador
+      TZ: UTC
+    ports: ["5432:5432"]
+    volumes: ["pgdata-dev:/var/lib/postgresql/data"]
+volumes:
+  pgdata-dev:
