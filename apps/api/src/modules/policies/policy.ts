@@ -38,6 +38,8 @@ export const POLICY_PARAMS = {
   pinLockoutSec: { schema: int(1, 300), scopes: UP_TO_BRANCH },
   pinLockoutMaxSec: { schema: int(1, 300), scopes: UP_TO_BRANCH },
   weekStartDay: { schema: int(1, 7), scopes: ORG_ONLY },
+  shiftMinMinutes: { schema: int(15, 1440), scopes: UP_TO_BRANCH },
+  shiftMaxMinutes: { schema: int(15, 1440), scopes: UP_TO_BRANCH },
 } as const satisfies Record<string, ParamDef>;
 
 export type PolicyKey = keyof typeof POLICY_PARAMS;
@@ -59,6 +61,8 @@ export interface EffectivePolicy {
   pinLockoutSec: number;
   pinLockoutMaxSec: number;
   weekStartDay: number;
+  shiftMinMinutes: number;
+  shiftMaxMinutes: number;
 }
 
 /** Un nivel de la jerarquía: solo los parámetros sobrescritos (los ausentes/null heredan). */

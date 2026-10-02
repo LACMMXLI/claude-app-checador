@@ -26,6 +26,8 @@ export const ENCARGADO_PERMISSIONS = [
   'employees.view',
   'employees.manage',
   'employees.pin.manage',
+  'schedules.view',
+  'schedules.manage',
   'attendance.view',
   'attendance.correction.apply',
   'incidents.resolve',

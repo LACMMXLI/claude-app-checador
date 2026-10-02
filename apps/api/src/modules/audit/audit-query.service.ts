@@ -7,7 +7,7 @@ import { auditLog } from '../../db/schema/index.js';
 export class AuditQueryService {
   constructor(private readonly tenantDb: TenantDb) {}
 
-  list(ctx: TenantContext, filter: { limit?: number; beforeId?: number; entityType?: string; branchId?: string; action?: string } = {}) {
+  list(ctx: TenantContext, filter: { limit?: number; beforeId?: number; entityType?: string; entityId?: string; branchId?: string; action?: string } = {}) {
     const limit = Math.min(Math.max(filter.limit ?? 50, 1), 200);
     return this.tenantDb.run(ctx, (tx) =>
       tx
@@ -17,6 +17,7 @@ export class AuditQueryService {
           and(
             filter.beforeId ? lt(auditLog.id, filter.beforeId) : undefined,
             filter.entityType ? eq(auditLog.entityType, filter.entityType) : undefined,
+            filter.entityId ? eq(auditLog.entityId, filter.entityId) : undefined,
             filter.branchId ? eq(auditLog.branchId, filter.branchId) : undefined,
             filter.action ? eq(auditLog.action, filter.action) : undefined,
           ),

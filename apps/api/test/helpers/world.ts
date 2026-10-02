@@ -48,6 +48,8 @@ export interface SeededOrg extends ProvisionedOrganization {
   kioskToken: string;
   branchA: string;
   branchB: string;
+  shiftId: string;
+  templateId: string;
 }
 
 /**
@@ -111,6 +113,12 @@ export async function seedOrganization(world: World, opts: { timezone?: string; 
   // Invitación pendiente (el token no se conserva: solo su hash en BD)
   await world.invitations.invite(adminCtx, { email: `invitado-${slug}@ejemplo.com`, roleId: provisioned.encargadoRoleId, scope: { type: 'BRANCHES', branchIds: [branchA] } });
 
+  // Planificación: un turno (crea el horario semanal) y una plantilla con una entrada
+  const access = await world.rbac.loadAccess(adminCtx, provisioned.adminMembershipId);
+  const shift = await world.scheduling.createShift(adminCtx, access, { employeeId: employee.id, branchId: branchA, date: '2031-03-03', startTime: '19:00', endTime: '03:00' });
+  const template = await world.templates.create(adminCtx, access, { branchId: branchA, name: 'Base' });
+  await world.templates.replaceEntries(adminCtx, access, template.id, template.version, [{ employeeId: employee.id, weekday: 1, startTime: '07:00', endTime: '15:00' }]);
+
   // Overrides de política en los tres niveles
   await world.policies.setOverride(adminCtx, 'ORGANIZATION', null, { breakAllowedMin: 35, weekStartDay: 1 });
   await world.policies.setOverride(adminCtx, 'BRANCH', branchB, { breakAllowedMin: 40 });
@@ -129,5 +137,7 @@ export async function seedOrganization(world: World, opts: { timezone?: string; 
     kioskToken: kiosk.token,
     branchA,
     branchB,
+    shiftId: shift.id,
+    templateId: template.id,
   };
 }

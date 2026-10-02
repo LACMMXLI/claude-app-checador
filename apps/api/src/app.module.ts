@@ -10,6 +10,7 @@ import { EmployeesController } from './http/controllers/employees.controller.js'
 import { KioskDeviceController, KiosksController } from './http/controllers/kiosks.controller.js';
 import { MembersController } from './http/controllers/members.controller.js';
 import { PoliciesController } from './http/controllers/policies.controller.js';
+import { SchedulesController } from './http/controllers/schedules.controller.js';
 import { ErrorsFilter } from './http/errors.filter.js';
 import { HEALTH_CHECK, HealthController } from './http/health.controller.js';
 import { RequestAuth } from './http/request-auth.js';
@@ -37,6 +38,7 @@ export class AppModule {
         KioskDeviceController,
         PoliciesController,
         AuditController,
+        SchedulesController,
       ],
       providers: [
         { provide: PG_POOL, useValue: options.pool },

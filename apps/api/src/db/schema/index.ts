@@ -1,5 +1,6 @@
 import {
   bigint,
+  smallint,
   boolean,
   date,
   integer,
@@ -10,6 +11,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /**
  * Esquema Drizzle (consultas tipadas). La FUENTE DE VERDAD son las migraciones SQL en `db/migrations`
@@ -20,6 +22,7 @@ const platform = pgSchema('platform');
 const auth = pgSchema('auth');
 const core = pgSchema('core');
 const audit = pgSchema('audit');
+const scheduling = pgSchema('scheduling');
 
 const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -41,6 +44,8 @@ export const policyDefaults = platform.table('policy_defaults', {
   pinLockoutSec: integer('pin_lockout_sec').notNull(),
   pinLockoutMaxSec: integer('pin_lockout_max_sec').notNull(),
   weekStartDay: integer('week_start_day').notNull(),
+  shiftMinMinutes: integer('shift_min_minutes').notNull(),
+  shiftMaxMinutes: integer('shift_max_minutes').notNull(),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });
 
@@ -257,6 +262,8 @@ export const policyOverrides = core.table('policy_overrides', {
   pinLockoutSec: integer('pin_lockout_sec'),
   pinLockoutMaxSec: integer('pin_lockout_max_sec'),
   weekStartDay: integer('week_start_day'),
+  shiftMinMinutes: integer('shift_min_minutes'),
+  shiftMaxMinutes: integer('shift_max_minutes'),
   updatedBy: uuid('updated_by'),
   createdAt: tstz('created_at').notNull().defaultNow(),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
@@ -279,4 +286,68 @@ export const auditLog = audit.table('audit_log', {
   reason: text('reason'),
   ip: text('ip'),
   requestId: text('request_id'),
+});
+
+// ── scheduling (Fase 2) ────────────────────────────────────────────────────────
+export const weeklySchedules = scheduling.table('weekly_schedules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  branchId: uuid('branch_id').notNull(),
+  weekStart: date('week_start', { mode: 'string' }).notNull(),
+  status: text('status').notNull().default('DRAFT'),
+  version: integer('version').notNull().default(1),
+  publishedAt: tstz('published_at'),
+  publishedBy: uuid('published_by'),
+  createdBy: uuid('created_by'),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const shifts = scheduling.table('shifts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  scheduleId: uuid('schedule_id').notNull(),
+  branchId: uuid('branch_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  businessDate: date('business_date', { mode: 'string' }).notNull(),
+  startsAt: tstz('starts_at').notNull(),
+  endsAt: tstz('ends_at').notNull(),
+  timezoneSnapshot: text('timezone_snapshot').notNull(),
+  scheduledMinutes: integer('scheduled_minutes').generatedAlwaysAs(sql`((EXTRACT(EPOCH FROM (ends_at - starts_at)) / 60)::integer)`),
+  status: text('status').notNull().default('SCHEDULED'),
+  cancelledAt: tstz('cancelled_at'),
+  cancelledBy: uuid('cancelled_by'),
+  cancelReason: text('cancel_reason'),
+  notes: text('notes'),
+  source: text('source').notNull().default('MANUAL'),
+  sourceShiftId: uuid('source_shift_id'),
+  sourceTemplateId: uuid('source_template_id'),
+  version: integer('version').notNull().default(1),
+  createdBy: uuid('created_by'),
+  updatedBy: uuid('updated_by'),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const scheduleTemplates = scheduling.table('schedule_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  branchId: uuid('branch_id').notNull(),
+  name: text('name').notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  version: integer('version').notNull().default(1),
+  createdBy: uuid('created_by'),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const scheduleTemplateEntries = scheduling.table('schedule_template_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  templateId: uuid('template_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  weekday: smallint('weekday').notNull(),
+  startLocal: time('start_local').notNull(),
+  endLocal: time('end_local').notNull(),
+  createdAt: tstz('created_at').notNull().defaultNow(),
 });

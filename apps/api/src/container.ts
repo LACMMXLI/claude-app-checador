@@ -13,6 +13,8 @@ import { RbacService } from './modules/auth/rbac.service.js';
 import { BranchesService } from './modules/core/branches.service.js';
 import { EmployeesService } from './modules/core/employees.service.js';
 import { PoliciesService } from './modules/policies/policies.service.js';
+import { SchedulingService } from './modules/scheduling/scheduling.service.js';
+import { TemplatesService } from './modules/scheduling/templates.service.js';
 
 export interface ContainerOptions {
   /** Pool del rol `app_user` (NOBYPASSRLS). */
@@ -37,6 +39,7 @@ export function createContainer(options: ContainerOptions) {
     pinGenerator: options.pinGenerator,
   });
   const auth = new AuthService(gate);
+  const scheduling = new SchedulingService(tenantDb, audit, policies, options.clock);
   return {
     tenantDb,
     gate,
@@ -50,6 +53,8 @@ export function createContainer(options: ContainerOptions) {
     sessions: new SessionsService(gate, auth),
     invitations: new InvitationsService(tenantDb, gate, audit),
     auditQuery: new AuditQueryService(tenantDb),
+    scheduling,
+    templates: new TemplatesService(tenantDb, audit, scheduling),
     kiosks: new KioskDevicesService(tenantDb, gate, audit),
     kioskIdentification: new KioskIdentificationService(tenantDb, employees, policies, audit, options.clock),
   };

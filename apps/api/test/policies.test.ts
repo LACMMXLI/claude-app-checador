@@ -6,7 +6,7 @@ import { PASSWORD, buildWorld, openPools, uniq, userCtx } from './helpers/world.
 const PLATFORM: EffectivePolicy = {
   entryToleranceMin: 10, exitToleranceMin: 0, maxBreaks: 1, breakAllowedMin: 35, breakToleranceMin: 0, requireBreak: false,
   earlyEntryWindowMin: 60, absentAfterMin: 60, operationalCutoff: '05:00:00', maxHoursUnscheduled: 14, debounceSec: 60,
-  pinMaxAttempts: 5, pinLockoutSec: 10, pinLockoutMaxSec: 120, weekStartDay: 1,
+  pinMaxAttempts: 5, pinLockoutSec: 10, pinLockoutMaxSec: 120, weekStartDay: 1, shiftMinMinutes: 60, shiftMaxMinutes: 960,
 };
 
 describe('política efectiva (función pura)', () => {

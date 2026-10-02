@@ -67,6 +67,14 @@ export class EmployeesController {
     return this.c.employees.list(ctx, access.branchesFor('employees.view'), parse(listQuery, query));
   }
 
+  /** Próximos turnos del empleado (solo de sucursales visibles para el usuario). */
+  @Get(':id/shifts')
+  async shifts(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string, @Query() q: unknown) {
+    const { ctx, access } = await this.loadVisible(req, id);
+    const input = parse(z.object({ from: z.string().datetime().optional(), limit: z.coerce.number().int().min(1).max(200).optional() }), q);
+    return this.c.scheduling.employeeShifts(ctx, access, id, { from: input.from ? new Date(input.from) : undefined, limit: input.limit });
+  }
+
   @Get(':id')
   async get(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
     return (await this.loadVisible(req, id)).employee;

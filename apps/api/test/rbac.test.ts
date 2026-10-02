@@ -30,24 +30,26 @@ describe('roles, permisos y alcance por sucursal', () => {
     expect(enc.can('attendance.view', A.branchB)).toBe(true);
     expect(enc.can('attendance.view', branchC)).toBe(false);
     expect(enc.can('attendance.correction.apply', A.branchA)).toBe(true);
-    for (const p of ['audit.view', 'roles.manage', 'settings.manage', 'schedules.manage', 'kiosks.manage', 'memberships.manage']) expect(enc.can(p), p).toBe(false);
+    for (const p of ['audit.view', 'roles.manage', 'settings.manage', 'schedules.history.manage', 'schedules.templates.manage', 'kiosks.manage', 'memberships.manage']) expect(enc.can(p), p).toBe(false);
+    expect(enc.can('schedules.manage', A.branchA)).toBe(true); // programa (D-30), siempre dentro de su alcance
+    expect(enc.can('schedules.manage', branchC)).toBe(false);
     expect([...(enc.branchesFor('attendance.view') as Set<string>)].sort()).toEqual([A.branchA, A.branchB].sort());
     expect(() => enc.assert('attendance.view', branchC)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
   });
 
-  it('se puede reducir/ampliar el alcance sin duplicar la cuenta; "programar horarios" se concede por permiso (rol aparte)', async () => {
+  it('se puede reducir/ampliar el alcance sin duplicar la cuenta; un permiso extra (plantillas) se concede con un rol aparte', async () => {
     const ctx = A.adminCtx;
     const rows = await pools.platform.query(`SELECT count(*)::int AS n FROM auth.users WHERE id = $1`, [A.encargadoUserId]);
     expect(rows.rows[0].n).toBe(1);
     // rol personalizado del negocio: "Encargado con horarios"
     const roleId = (await pools.platform.query(
       `WITH r AS (INSERT INTO core.roles (organization_id, name) VALUES ($1, 'Encargado con horarios') RETURNING id)
-       INSERT INTO core.role_permissions (organization_id, role_id, permission_code) SELECT $1, id, 'schedules.manage' FROM r RETURNING role_id`, [A.organizationId])).rows[0].role_id;
+       INSERT INTO core.role_permissions (organization_id, role_id, permission_code) SELECT $1, id, 'schedules.templates.manage' FROM r RETURNING role_id`, [A.organizationId])).rows[0].role_id;
     await world.memberships.assignRole(ctx, A.encargadoMembershipId, roleId, { type: 'BRANCHES', branchIds: [A.branchA] });
     const enc = await world.rbac.loadAccess(ctx, A.encargadoMembershipId);
-    expect(enc.can('schedules.manage', A.branchA)).toBe(true);
-    expect(enc.can('schedules.manage', A.branchB)).toBe(false); // el permiso extra solo aplica a su sucursal
-    expect(enc.branchesFor('schedules.manage')).toEqual(new Set([A.branchA]));
+    expect(enc.can('schedules.templates.manage', A.branchA)).toBe(true);
+    expect(enc.can('schedules.templates.manage', A.branchB)).toBe(false); // el permiso extra solo aplica a su sucursal
+    expect(enc.branchesFor('schedules.templates.manage')).toEqual(new Set([A.branchA]));
   });
 
   it('un alcance por sucursales exige al menos una sucursal', async () => {

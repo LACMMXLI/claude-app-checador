@@ -24,11 +24,11 @@ beforeAll(async () => {
 });
 afterAll(() => pools.close());
 
-/** Columnas insertables (se excluyen las GENERATED ALWAYS AS IDENTITY). */
+/** Columnas insertables (se excluyen identidades y columnas generadas). */
 async function insertableColumns(table: string): Promise<string[]> {
   const [schema, name] = table.split('.');
   const { rows } = await pools.superuser.query(
-    `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND is_identity = 'NO' ORDER BY ordinal_position`,
+    `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND is_identity = 'NO' AND is_generated = 'NEVER' ORDER BY ordinal_position`,
     [schema, name],
   );
   return rows.map((r) => `"${r.column_name}"`);
@@ -41,6 +41,7 @@ describe('aislamiento entre negocios — cobertura', () => {
         'audit.audit_log', 'core.branches', 'core.employee_branch_assignments', 'core.employees', 'core.kiosk_devices',
         'core.invitations', 'core.kiosk_pairing_codes', 'core.organization_memberships', 'core.pin_attempts', 'core.policy_overrides',
         'core.role_assignment_branches', 'core.role_assignments', 'core.role_permissions', 'core.roles',
+        'scheduling.schedule_template_entries', 'scheduling.schedule_templates', 'scheduling.shifts', 'scheduling.weekly_schedules',
       ]),
     );
     for (const t of tables) {
@@ -55,7 +56,8 @@ describe('aislamiento entre negocios — cobertura', () => {
 describe('aislamiento negocio A ↔ negocio B — LECTURA y ESCRITURA en cada tabla', () => {
   it.each(['audit.audit_log', 'core.branches', 'core.employee_branch_assignments', 'core.employees', 'core.invitations', 'core.kiosk_devices',
     'core.kiosk_pairing_codes', 'core.organization_memberships', 'core.pin_attempts', 'core.policy_overrides',
-    'core.role_assignment_branches', 'core.role_assignments', 'core.role_permissions', 'core.roles'])('%s', async (table) => {
+    'core.role_assignment_branches', 'core.role_assignments', 'core.role_permissions', 'core.roles',
+    'scheduling.schedule_template_entries', 'scheduling.schedule_templates', 'scheduling.shifts', 'scheduling.weekly_schedules'])('%s', async (table) => {
     expect(tables).toContain(table);
     const totalA = await count(pools.platform, `SELECT count(*) FROM ${table} WHERE organization_id = $1`, [A.organizationId]);
     const columns = await insertableColumns(table);
