@@ -1,6 +1,6 @@
 # 03 · Arquitectura
 
-> **Versión 1.1 — CONGELADA.** Estado: **Fases 0 y 1 implementadas y probadas** (ver §10 y `04-operacion.md`). **Aún NO desplegable:** faltan los criterios de Docker y GitHub Actions (§9).
+> **Versión 1.1 — CONGELADA.** Estado: **Fases 0 y 1 implementadas y probadas** (ver §10 y `04-operacion.md`). **Aún NO desplegable:** falta verificar Docker (§9). GitHub Actions ya está en verde.
 
 ## 1. Resumen
 
@@ -157,9 +157,9 @@ Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_
 
 **Criterios OBLIGATORIOS antes de considerar el sistema desplegable** (pendientes):
 1. En un entorno con Docker: construir ambos `Dockerfile`, `docker compose up` sobre base limpia, migraciones, pruebas completas, API y panel arriba.
-2. Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real.
+2. ✅ Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (run #5, commit `cc1d7cb`).
 
-> Estado honesto: los `Dockerfile`/`docker-compose.yml` no se han podido ejecutar (el entorno de desarrollo no tiene Docker). Sí se verificó el flujo equivalente con los artefactos compilados contra PostgreSQL real: bootstrap → migrate → `check:tenancy` → alta de Fatboy → API → panel (incluido el servidor *standalone* de Next) → E2E con Playwright. GitHub Actions aún no ha mostrado ejecuciones para esta rama.
+> Estado honesto: los `Dockerfile`/`docker-compose.yml` no se han podido ejecutar (el entorno de desarrollo no tiene Docker). Sí se verificó el flujo equivalente con los artefactos compilados contra PostgreSQL real: bootstrap → migrate → `check:tenancy` → alta de Fatboy → API → panel (incluido el servidor *standalone* de Next) → E2E con Playwright. GitHub Actions: ✅ en verde desde el run #5.
 
 ## 10. Plan por fases
 

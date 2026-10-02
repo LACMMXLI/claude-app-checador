@@ -2,7 +2,7 @@
 
 Plataforma para control de asistencia de negocios con varias sucursales: kiosco con PIN, horarios rotativos, turnos nocturnos, incidencias, correcciones auditadas, tablero en tiempo real y reportes. **Multi-tenant desde el inicio** (Plataforma → Negocio → Sucursales → Empleados) y primer módulo de un sistema de empleados más amplio. **Fatboy es el primer negocio (tenant).**
 
-**Estado:** reglas y modelo v1.1 **congelados** · **Fase 0** (fundaciones multi-tenant) y **Fase 1** (identidad, sesión, negocio activo, RBAC y panel de administración base) implementadas y probadas. **Aún no desplegable**: faltan verificar Docker y una ejecución real de GitHub Actions.
+**Estado:** reglas y modelo v1.1 **congelados** · **Fase 0** (fundaciones multi-tenant) y **Fase 1** (identidad, sesión, negocio activo, RBAC y panel de administración base) implementadas y probadas. CI en GitHub Actions en verde. **Aún no desplegable**: falta verificar Docker (`docker compose` sobre base limpia).
 
 ## Documentación
 

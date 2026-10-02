@@ -35,7 +35,7 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
 ## 2.1 Antes de producción (obligatorio)
 
 - [ ] Docker: construir `apps/api/Dockerfile` y `apps/web/Dockerfile`, `docker compose up` con base limpia, pruebas completas y panel funcionando.
-- [ ] GitHub Actions: al menos una ejecución real en verde (Settings → Actions debe estar habilitado en el repositorio).
+- [x] GitHub Actions: ejecución real en verde (run #5, commit `cc1d7cb`). Mantenerlo en verde es requisito para cada despliegue.
 
 ## 3. Respaldos (crítico)
 

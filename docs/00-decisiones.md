@@ -38,7 +38,7 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.0 y mod
 ## Criterios obligatorios ANTES de considerar el sistema desplegable
 
 - [ ] `Dockerfile` (api y web) construidos y `docker compose up` sobre una base limpia: migraciones, pruebas completas y API/panel arriba. *(No verificado aún: el entorno de desarrollo no tiene Docker.)*
-- [ ] Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (typecheck, build, migraciones desde cero, `check:tenancy`, pruebas, E2E, smoke).
+- [x] Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (typecheck, build, migraciones desde cero, `check:tenancy`, pruebas, E2E, smoke): **run #5, commit `cc1d7cb`**. Las ejecuciones #1–#4 fallaron y se corrigieron (contraseñas de roles compartidas por el clúster; carrera de navegación en el E2E).
 
 ## Ajustes por el congelamiento (respecto al borrador anterior)
 
