@@ -1,28 +1,41 @@
-# 00 · Decisiones pendientes
+# 00 · Decisiones
 
-Para cada punto dejo mi **propuesta** (`default`). Si estás de acuerdo con todas, basta responder "ok a los defaults". Si cambias alguna, dime el número.
+## ✅ Resueltas
 
-| # | Pregunta | Propuesta | Impacto |
-|---|---|---|---|
-| **D-1** | ¿En qué zona horaria están las 3 sucursales? ¿Todas la misma? | `America/Mexico_City` para todas, configurable por sucursal. | Cálculo de turnos y fechas laborales |
-| **D-2** ✅ | *Resuelta:* la comida es **solo control de tiempo e incidencias** (salida → regreso → duración → exceso). No se descuenta de las horas trabajadas ni afecta pagos/nómina. | Horas trabajadas = salida − entrada. | Horas trabajadas en reportes |
-| **D-3** | Si la tolerancia es 10 min y llega a las 7:12 para un turno de 7:00, ¿el retardo es de **12 min** o de **2 min**? (Y a las 7:09, ¿es a tiempo?) | 12 min (se cuenta desde la hora programada); a las 7:09 es a tiempo. | Minutos de retardo |
-| **D-4** | ¿Después de cuántos minutos sin llegar se considera **"no se presentó"** en el tablero? ¿Un retardo muy grande cuenta como falta? | 60 min para mostrarlo en el tablero. El retardo grande **no** se convierte en falta (configurable). La falta definitiva se registra al terminar el turno. | Tablero y reportes de faltas |
-| **D-5** | ¿Cuánto antes del turno se permite checar entrada? ¿El tiempo antes de la hora programada cuenta como trabajado? | 60 min antes. Cuenta hora real (se muestra la diferencia con lo programado). | Entradas anticipadas, horas |
-| **D-6** | Si alguien checa **sin tener turno programado** (cubrió a alguien, se olvidaron de programarlo): ¿se **permite y se marca** o se **bloquea**? | Permitir y marcar con incidencia `SIN_TURNO`. | Operación diaria |
-| **D-7** | ¿El encargado **aplica** correcciones directamente (con motivo obligatorio) o solo **solicita** y el admin aprueba? | Aplica directo en su sucursal con motivo; todo auditado; el admin puede revisarlo. (Es un permiso: se cambia sin código.) | Agilidad vs control |
-| **D-8** | Longitud del PIN y quién lo asigna. ¿El empleado puede cambiarlo? | 6 dígitos, generado por el sistema, lo entrega el encargado/admin. Cambio por el empleado: fase futura. | Seguridad / UX |
-| **D-9** | "**Hora límite de operación**": lo entendí como el momento a partir del cual una jornada abierta sin salida se considera olvidada. ¿Es eso, o te referías al horario de apertura/cierre del local (para no permitir checadas fuera de él)? | Mi interpretación: 4 h después del fin del turno se marca "revisión". Si además quieres horario de operación por sucursal, lo agrego. | Detección de olvidos |
-| **D-10** | ¿La semana de programación inicia lunes? ¿Hay periodos de pago (quincenal/semanal) que deban existir en reportes? | Semana lunes–domingo; periodo personalizado libre. | Programación y reportes |
-| **D-11** | ¿Encargados y administradores entran con **correo + contraseña** al panel? | Sí. 2FA opcional más adelante. | Acceso al panel |
-| **D-12** | ¿Qué tan estable es el internet en las sucursales? ¿Necesitas que el kiosco **funcione sin conexión**? | MVP requiere conexión; contingencia manual. Offline como fase futura. | Complejidad del kiosco |
-| **D-13** | ORM: **Drizzle** o **Prisma**. | Drizzle (por triggers/restricciones de Postgres). | Código de acceso a datos |
-| **D-14** | ¿Más de una comida o descanso por jornada? | Una comida (configurable). | Máquina de estados |
-| **D-15** | ¿Te sirve que el **encargado también sea empleado** (checa y además administra)? ¿Los dueños/administradores checan? | Sí: un usuario puede estar ligado a un empleado. | Modelo de usuarios |
-| **D-16** | Idioma: **interfaz y documentos en español**, código/nombres de tablas en inglés. | Sí. | Convenciones |
+| # | Decisión | Dónde quedó |
+|---|---|---|
+| **D-2** | La comida es **solo control de tiempo e incidencias** (salida → regreso → duración → exceso). No descuenta horas ni afecta pagos/nómina. Default **35 min**, configurable por negocio, sucursal y **empleado**. | RN-CAL-02 |
+| **D-3** | Se registran los **minutos reales de retardo** (7:12 vs 7:00 = 12 min). La tolerancia solo decide si **genera incidencia** (7:08 no, 7:12 sí). | §9 |
+| **D-6** | Checada **sin turno programado: se permite** y se marca "SIN TURNO PROGRAMADO" para revisión. | RN-EVT-06 |
+| **D-7** | El encargado **corrige directamente**, solo en jornadas de su alcance, con **motivo obligatorio** y auditoría completa. Nunca se borra ni reemplaza en silencio la original. | RN-COR-04 |
+| **D-9** | Jornada abierta = olvido de salida: **se detecta, se marca como incidencia y requiere corrección; el sistema nunca inventa una hora de salida.** Existe **hora de corte operativo por sucursal**. | §5 (RN-OPE) |
+| **Multi-tenant** | Plataforma → Negocio → Sucursales → Empleados; `organization_id` en todo; aislamiento en backend **y** base de datos (RLS); usuario con varias sucursales sin duplicar cuenta; auditoría con negocio y sucursal. Fatboy = primer tenant. | §3 de reglas, §3 de modelo, §2 de arquitectura |
+
+## ⏳ Pendientes (para revisar una por una)
+
+Para cada una: propuesta (`default`) y un ejemplo. Respuesta rápida: "D-n ok" o "D-n: cambio X".
+
+| # | Tema | Propuesta resumida |
+|---|---|---|
+| **D-1** | Zona horaria | `America/Mexico_City` por defecto del negocio; cada sucursal puede tener la suya |
+| **D-4** | "No se presentó" y retardo grande | Tablero: "Retardo" tras la tolerancia; "No se presentó" a los 60 min. **Falta definitiva** solo al terminar el turno sin Entrada. Retardo grande **no** se vuelve falta (configurable, apagado) |
+| **D-5** | Entrada anticipada | Se permite checar hasta 60 min antes del turno; se guarda la hora real |
+| **D-8** | PIN | 6 dígitos, generado por el sistema, lo entrega encargado/admin; reinicio sí, cambio por el empleado no (por ahora) |
+| **D-10** | Semana y periodos | Semana lunes–domingo (configurable por negocio); reportes por periodo libre con atajos (semana, quincena, mes) |
+| **D-11** | Acceso al panel | Correo + contraseña; recuperación de contraseña la hace el admin (sin correo automático en el MVP) |
+| **D-12** | Sin internet | MVP exige conexión; contingencia = corrección manual con motivo |
+| **D-13** | ORM | Drizzle |
+| **D-14** | Más de una comida | Una por jornada (configurable) |
+| **D-15** | Encargados/dueños que también checan | Un usuario puede estar ligado a su ficha de empleado (opcional) |
+| **D-16** | Idioma | UI en español, listo para otros idiomas; código en inglés |
+| **D-17** *(nueva)* | Checar en sucursal sin asignación | Se permite y se marca para revisión (mismo criterio que D-6) |
+| **D-18** *(nueva)* | Quién puede corregir a quién | Por sucursal **donde se trabajó**; nadie corrige su propia jornada |
+| **D-19** *(nueva)* | Detalles multi-negocio | Usuario global con membresías; PIN único por negocio; alta de negocios por CLI; negocio por sesión/token (sin subdominios) |
+
+El detalle con ejemplos de cada una se revisa en la conversación; al resolverlas se mueven a la tabla de arriba.
 
 ## Siguiente paso
 
-1. Revisas/ajustas `01-reglas-de-negocio.md` y estas decisiones.
-2. Con tus respuestas congelo reglas y modelo.
-3. Empiezo **Fase 0** (monorepo, Docker, CI, migraciones, auth, auditoría) y la subimos a Coolify desde el principio para validar el despliegue.
+1. Revisamos D-1, D-4, D-5, D-8, D-10…D-19.
+2. Congelo reglas y modelo (v1.0).
+3. Fase 0: monorepo, Docker, CI, migraciones, **roles de BD + RLS + contexto de negocio + pruebas de aislamiento**, auth con alcance de sucursales, auditoría base y CLI de alta de negocio.
