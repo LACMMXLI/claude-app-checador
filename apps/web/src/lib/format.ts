@@ -31,3 +31,30 @@ export function addDays(date: string, days: number): string {
 export function todayLocal(): string {
   return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
+
+/** Hora local de un instante en la zona de la sucursal (los instantes vienen en UTC). */
+export function timeIn(iso: string | null | undefined, tz: string): string {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat('es-MX', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(new Date(iso));
+}
+
+export function dateTimeIn(iso: string | null | undefined, tz: string): string {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: tz }).format(new Date(iso));
+}
+
+/** Fecha y hora local (para prellenar formularios de corrección). */
+export function localParts(iso: string, tz: string): { date: string; time: string } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(iso))
+      .map((p) => [p.type, p.value]),
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
+/** "+12 min" / "−20 min" / "0 min" (diferencias reales contra el turno). */
+export function signedMinutes(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—';
+  return n > 0 ? `+${n} min` : n < 0 ? `−${Math.abs(n)} min` : '0 min';
+}

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
+import { AttendanceHistory } from '@/components/attendance';
 import { Card, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee, type Shift } from '@/lib/api';
 import { dayLabel, minutesLabel, shiftLabel } from '@/lib/format';
@@ -96,6 +97,7 @@ export default function EmployeeDetailPage() {
           )}
         </Card>
       )}
+      {can('attendance.view') && <AttendanceHistory employeeId={id} />}
       <Card title={t('employees.assignments')}>
         <table>
           <thead><tr><th>{t('common.branch')}</th><th>Tipo</th><th>{t('employees.validFrom')}</th><th>{t('employees.validTo')}</th><th>{t('common.reason')}</th></tr></thead>

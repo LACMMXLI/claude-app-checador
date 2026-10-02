@@ -55,7 +55,7 @@ jobs:
       - name: Pruebas (incluye aislamiento A↔B de lectura/escritura y detección de tablas sin protección)
         run: pnpm test
 
-      - name: E2E del panel (Playwright + API + PostgreSQL reales)
+      - name: E2E del panel y del kiosco (Playwright + API + PostgreSQL reales)
         env:
           E2E_PG_SUPER_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: |
@@ -71,3 +71,8 @@ jobs:
           node apps/api/dist/src/main.js &
           for i in $(seq 1 20); do curl -fs http://127.0.0.1:3000/health && exit 0; sleep 1; done
           echo "La API no respondió /health" && exit 1
+
+      - name: Smoke del comando de reconciliación (compilado, como app_user)
+        env:
+          DATABASE_URL: postgresql://app_user:ci-app-user@localhost:5432/checador_ci
+        run: node apps/api/dist/src/cli/reconcile.js

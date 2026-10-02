@@ -24,7 +24,8 @@ node dist/src/cli/platform.js create-organization --name Fatboy --slug fatboy --
   --branch VEN=Venecia --branch SMA="San Marcos" --branch AME=Américas \
   --admin-email dueno@fatboy.example --admin-name "Dueño Fatboy" --admin-password 'contraseña-larga-123' >/dev/null
 
-DATABASE_URL="postgresql://app_user:$APP_USER_PASSWORD@$HOSTPART/$DB" PIN_PEPPER=e2e-pepper-e2e-pepper-e2e-pepper-1234 PORT=3900 node dist/src/main.js > /tmp/e2e-api.log 2>&1 &
+export E2E_APP_DATABASE_URL="postgresql://app_user:$APP_USER_PASSWORD@$HOSTPART/$DB"  # también lo usa el E2E de reconciliación
+DATABASE_URL="$E2E_APP_DATABASE_URL" PIN_PEPPER=e2e-pepper-e2e-pepper-e2e-pepper-1234 PORT=3900 node dist/src/main.js > /tmp/e2e-api.log 2>&1 &
 API_PID=$!
 cd "$ROOT/apps/web"
 API_INTERNAL_URL=http://127.0.0.1:3900 node node_modules/next/dist/bin/next start -p 3901 > /tmp/e2e-web.log 2>&1 &

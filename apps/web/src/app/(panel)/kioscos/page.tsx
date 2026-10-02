@@ -38,6 +38,7 @@ export default function KiosksPage() {
   return (
     <>
       <h1>{t('kiosks.title')}</h1>
+      <p className="muted">{t('kiosks.howTo')}</p>
       <ErrorBox message={error ?? action.error} />
       {secret && <OneTimeSecret label={t('kiosks.tokenCreated')} value={secret} onClose={() => setSecret(null)} />}
       <Card title={t('kiosks.new')}>

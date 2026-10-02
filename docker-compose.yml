@@ -41,7 +41,9 @@ services:
       DATABASE_URL: postgresql://app_user:${APP_USER_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
       PIN_PEPPER: ${PIN_PEPPER:?define PIN_PEPPER (>= 32 caracteres)}
       PORT: ${PORT:-3000}
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}   # cookie __Host-sid con Secure: el panel debe servirse por HTTPS
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}   # cookies __Host-sid / __Host-kiosk con Secure: el panel debe servirse por HTTPS
+      # Reconciliación de asistencia dentro de la API cada N segundos (0 = apagada; ver servicio `reconcile`)
+      RECONCILE_INTERVAL_SEC: ${RECONCILE_INTERVAL_SEC:-0}
       NODE_ENV: production
       TZ: UTC
     expose: ["3000"]
@@ -74,6 +76,20 @@ services:
     entrypoint: ["node", "dist/src/cli/platform.js"]
     environment:
       PLATFORM_DATABASE_URL: postgresql://platform_ops:${PLATFORM_OPS_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
+
+  # Reconciliación de asistencia (faltas, salidas olvidadas, jornadas abiertas largas). Idempotente.
+  # NO arranca sola: programarla en Coolify como tarea periódica (p. ej. cada 5 min) o ejecutar a mano:
+  #   docker compose --profile tools run --rm reconcile
+  # Usa app_user (sin BYPASSRLS): cada negocio se procesa en su propio contexto.
+  reconcile:
+    profiles: ["tools"]
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    depends_on:
+      init: { condition: service_completed_successfully }
+    command: ["node", "dist/src/cli/reconcile.js"]
+    environment:
+      DATABASE_URL: postgresql://app_user:${APP_USER_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
+      TZ: UTC
 
 volumes:
   pgdata:

@@ -58,3 +58,51 @@ table.week td { min-width: 110px; }
 button.add { font-size: .9rem; margin-left: .25rem; }
 .overlay { position: fixed; inset: 0; background: rgb(0 0 0 / .45); display: grid; place-items: center; padding: 1rem; z-index: 10; }
 .dialog { width: 100%; max-width: 560px; max-height: 90vh; overflow: auto; }
+/* ── Kiosco (táctil, pantalla completa) ── */
+.kiosk { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1rem; gap: 1rem; background: var(--bg); }
+.kiosk-header { width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.kiosk-brand { display: flex; gap: .75rem; align-items: center; }
+.kiosk-logo { height: 56px; width: auto; }
+.kiosk-org { font-size: 1.5rem; font-weight: 700; }
+.kiosk-branch { font-size: 1.1rem; color: var(--muted); }
+.kiosk-clock { text-align: right; }
+.kiosk-time { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kiosk-offline { width: 100%; max-width: 900px; background: var(--danger); color: #fff; padding: .75rem 1rem; border-radius: var(--radius); font-weight: 600; text-align: center; }
+.kiosk-panel { width: 100%; max-width: 520px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; align-items: stretch; text-align: center; }
+.kiosk-panel h1 { font-size: 1.8rem; margin: 0; }
+.kiosk-panel label { text-align: left; color: var(--muted); }
+.kiosk-input { font-size: 1.1rem; padding: .8rem; }
+.kiosk-wide { padding: 1rem; font-size: 1.2rem; }
+.pin-dots { display: flex; justify-content: center; gap: .9rem; margin: .5rem 0; }
+.pin-dots span { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--muted); }
+.pin-dots span.filled { background: var(--text); border-color: var(--text); }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+.keypad button { font-size: 2rem; padding: 1.1rem 0; min-height: 80px; border-radius: 14px; touch-action: manipulation; }
+.keypad .key-secondary { font-size: 1.1rem; }
+.keypad .primary { font-size: 1.1rem; }
+.kiosk-info { font-size: 1.2rem; margin: 0; }
+.kiosk-message { font-size: 1.1rem; }
+.kiosk-actions { display: flex; flex-direction: column; gap: .9rem; }
+.kiosk-action { font-size: 1.8rem; padding: 1.4rem; border-radius: 14px; min-height: 90px; touch-action: manipulation; }
+.kiosk-done { border-color: var(--ok); }
+.kiosk-check { font-size: 5rem; line-height: 1; color: var(--ok); }
+.kiosk-footer { margin-top: auto; font-size: .8rem; }
+/* ── Asistencia ── */
+.counters { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.counter { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .6rem .8rem; text-align: left; color: var(--text); }
+.counter strong { display: block; font-size: 1.6rem; }
+.counter.selected { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.state { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .8rem; border: 1px solid currentColor; white-space: nowrap; }
+.state.WORKING, .state.LEFT { color: var(--ok); }
+.state.ON_BREAK { color: #2563eb; }
+.state.LATE_NOT_ARRIVED, .state.WITHIN_TOLERANCE { color: #b45309; }
+.state.ABSENT_NOT_ARRIVED, .state.MISSED, .state.NEEDS_REVIEW { color: var(--danger); }
+.state.UPCOMING { color: var(--muted); }
+.late { color: var(--danger); font-weight: 600; }
+.chips { display: flex; gap: .25rem; flex-wrap: wrap; }
+.chip { font-size: .75rem; padding: .05rem .4rem; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); }
+.chip.open { border-color: var(--danger); color: var(--danger); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.compare dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; }
+.compare dt { color: var(--muted); }
+.compare dd { margin: 0; }

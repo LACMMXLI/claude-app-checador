@@ -9,6 +9,9 @@ import { useSession } from '@/lib/session';
 
 const NAV = [
   { href: '/', label: 'nav.dashboard', permission: null },
+  { href: '/asistencia', label: 'nav.live', permission: 'attendance.view' },
+  { href: '/jornadas', label: 'nav.sessions', permission: 'attendance.view' },
+  { href: '/incidencias', label: 'nav.incidents', permission: 'attendance.view' },
   { href: '/horario', label: 'nav.schedule', permission: 'schedules.view' },
   { href: '/plantillas', label: 'nav.templates', permission: 'schedules.templates.manage' },
   { href: '/sucursales', label: 'nav.branches', permission: null },

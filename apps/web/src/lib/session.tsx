@@ -13,7 +13,7 @@ interface SessionValue {
 const SessionContext = createContext<SessionValue>({ me: null, reload: async () => undefined, can: () => false });
 export const useSession = () => useContext(SessionContext);
 
-const PUBLIC = ['/login', '/invitacion'];
+const PUBLIC = ['/login', '/invitacion', '/kiosco'];
 
 /** Carga la identidad y el negocio activo desde el servidor; redirige a login o al selector según corresponda. */
 export function SessionProvider({ children }: { children: ReactNode }) {
