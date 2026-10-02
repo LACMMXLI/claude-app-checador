@@ -5,7 +5,7 @@ Para cada punto dejo mi **propuesta** (`default`). Si estás de acuerdo con toda
 | # | Pregunta | Propuesta | Impacto |
 |---|---|---|---|
 | **D-1** | ¿En qué zona horaria están las 3 sucursales? ¿Todas la misma? | `America/Mexico_City` para todas, configurable por sucursal. | Cálculo de turnos y fechas laborales |
-| **D-2** | ¿La comida **se paga** (cuenta como tiempo trabajado) o **se descuenta**? | Se descuenta (horas trabajadas = presencia − comida). | Horas trabajadas en reportes |
+| **D-2** ✅ | *Resuelta:* la comida es **solo control de tiempo e incidencias** (salida → regreso → duración → exceso). No se descuenta de las horas trabajadas ni afecta pagos/nómina. | Horas trabajadas = salida − entrada. | Horas trabajadas en reportes |
 | **D-3** | Si la tolerancia es 10 min y llega a las 7:12 para un turno de 7:00, ¿el retardo es de **12 min** o de **2 min**? (Y a las 7:09, ¿es a tiempo?) | 12 min (se cuenta desde la hora programada); a las 7:09 es a tiempo. | Minutos de retardo |
 | **D-4** | ¿Después de cuántos minutos sin llegar se considera **"no se presentó"** en el tablero? ¿Un retardo muy grande cuenta como falta? | 60 min para mostrarlo en el tablero. El retardo grande **no** se convierte en falta (configurable). La falta definitiva se registra al terminar el turno. | Tablero y reportes de faltas |
 | **D-5** | ¿Cuánto antes del turno se permite checar entrada? ¿El tiempo antes de la hora programada cuenta como trabajado? | 60 min antes. Cuenta hora real (se muestra la diferencia con lo programado). | Entradas anticipadas, horas |

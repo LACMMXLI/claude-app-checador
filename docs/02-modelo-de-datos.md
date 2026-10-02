@@ -140,7 +140,7 @@ Una fila por turno trabajado (o ausente). Es una **proyección recalculable** a 
 | `entry_status` | `ON_TIME` / `LATE` / `NONE` |
 | `exit_status` | `NORMAL` / `EARLY` / `MISSING` |
 | `late_minutes`, `early_leave_minutes` | |
-| `scheduled_minutes`, `present_minutes`, `break_minutes`, `break_exceeded_minutes`, `worked_minutes` | |
+| `scheduled_minutes`, `worked_minutes` (= salida − entrada, sin descontar comida), `break_minutes` (duración total de comida, informativa), `break_exceeded_minutes` | |
 | `policy_snapshot` | `jsonb` con los parámetros usados al calcular (RN-CAL-05). |
 | `computed_at`, `version` | Para control de concurrencia y reprocesos. |
 
@@ -203,7 +203,7 @@ Un cambio de hora = una línea `VOID` + una línea `ADD` en la misma corrección
 ## 6. Configuración
 
 ### `attendance_policies`
-Una fila por *nivel*: `scope` (`GLOBAL`/`BRANCH`/`EMPLOYEE`), `branch_id`, `employee_id`, y **una columna tipada por parámetro** (`tolerance_in_min`, `tolerance_out_min`, `break_allowed_min`, `break_tolerance_min`, `max_breaks`, `break_paid`, `unscheduled_punch` …), todas nullable salvo en `GLOBAL`. `NULL` = hereda. Validación con `CHECK` y esquema compartido en código.
+Una fila por *nivel*: `scope` (`GLOBAL`/`BRANCH`/`EMPLOYEE`), `branch_id`, `employee_id`, y **una columna tipada por parámetro** (`tolerance_in_min`, `tolerance_out_min`, `break_allowed_min`, `break_tolerance_min`, `max_breaks`, `unscheduled_punch` …), todas nullable salvo en `GLOBAL`. `NULL` = hereda. Validación con `CHECK` y esquema compartido en código.
 
 Se eligieron **columnas tipadas** (y no clave/valor libre) porque son el núcleo del negocio: hay tipos, rangos y migraciones claras. Para ajustes menores y extensibles (ej. texto del kiosco) existe `core.app_settings(key, value jsonb)`.
 

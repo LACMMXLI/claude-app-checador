@@ -92,12 +92,12 @@ Variables: `Hp_ini` / `Hp_fin` = inicio/fin **programados**; `Hr_ini` / `Hr_fin`
 | **Falta** | No hubo Entrada cuando terminó el turno (la registra el sistema al cierre). Opcional: un retardo mayor a `retardo_cuenta_como_falta_min` (`default` apagado) cuenta como falta |
 | **Salida anticipada** | `Hr_fin < Hp_fin − tolerancia_salida`. Solo si la Salida existe; si falta, es incidencia, no salida anticipada |
 | **Horas programadas** | `Hp_fin − Hp_ini` |
-| **Presencia** | `Hr_fin − Hr_ini` |
-| **Tiempo de comida** | Suma de (`Regreso − Salida a comer`) |
-| **Horas trabajadas** | `Presencia − Tiempo de comida` si la comida **no es pagada** (`default`), o `Presencia` si es pagada **[D-2]** |
+| **Horas trabajadas** | `Hr_fin − Hr_ini` (tiempo entre la Entrada y la Salida). **No se descuenta la comida** |
+| **Tiempo de comida** | Suma de (`Regreso − Salida a comer`). Dato informativo, independiente de las horas trabajadas |
+| **Exceso de comida** | `max(0, Tiempo de comida − comida_permitida_min − tolerancia_comida_min)` |
 
 - **RN-CAL-01** La entrada anticipada se registra con la hora real. Las horas trabajadas usan hora real; el reporte muestra también la diferencia contra lo programado.
-- **RN-CAL-02** **Comida excedida:** duración > `comida_permitida_min` + `tolerancia_comida_min`. `default`: 35 min y 0 min de tolerancia. Se reporta cuántos minutos se excedió.
+- **RN-CAL-02** **La comida es solo control de tiempo e incidencias:** registra a qué hora salió, a qué hora regresó y cuánto tiempo estuvo fuera. **No descuenta tiempo de las horas trabajadas, no calcula pagos y no afecta nómina** (ni tiene relación con el costo de los alimentos). Si el empleado tiene 30 min permitidos y tarda 42, el sistema registra duración 42 min y exceso 12 min, y genera la incidencia `COMIDA_EXCEDIDA`. Por `default`: 35 min permitidos y 0 min de tolerancia (ambos configurables por sucursal o empleado).
 - **RN-CAL-03** Comida con salida pero sin regreso ⇒ incidencia `REGRESO_COMIDA_FALTANTE`.
 - **RN-CAL-04** Opcional: `requiere_comida` (`default` apagado). Si está activo y la jornada no tiene comida ⇒ incidencia `SIN_COMIDA`.
 - **RN-CAL-05** **Los resultados se calculan con la política vigente y se guardan con una copia de los parámetros usados.** Cambiar una tolerancia hoy **no modifica silenciosamente** resultados históricos; solo se recalcula una jornada cuando hay corrección o un reproceso explícito (que queda auditado).
@@ -119,7 +119,6 @@ Variables: `Hp_ini` / `Hp_fin` = inicio/fin **programados**; `Hr_ini` / `Hr_fin`
 | `comida_permitida_min` | 35 |
 | `tolerancia_comida_min` | 0 |
 | `max_comidas_por_jornada` | 1 |
-| `comida_pagada` | no |
 | `requiere_comida` | no |
 | `checada_sin_turno` | permitir y marcar |
 | `antirrebote_seg` | 60 |
@@ -214,4 +213,4 @@ Por sucursal, lista cada empleado con turno programado "ahora" o con jornada abi
 
 ## 16. Fuera del alcance del MVP (pero la arquitectura lo prevé)
 
-QR / cámara / biometría · modo sin conexión en el kiosco · vacaciones, permisos e incapacidades · días festivos · horas extra y reglas de nómina · reglas tipo "N retardos = 1 falta" · notificaciones (WhatsApp/correo) · exportación PDF · rol de RH · módulos futuros (mesas, adelantos, nómina, comunicados, solicitudes).
+QR / cámara / biometría · modo sin conexión en el kiosco · vacaciones, permisos e incapacidades · días festivos · horas extra, descuentos y cualquier cálculo de nómina o pago (incluida la comida) · reglas tipo "N retardos = 1 falta" · notificaciones (WhatsApp/correo) · exportación PDF · rol de RH · módulos futuros (mesas, adelantos, nómina, comunicados, solicitudes).
