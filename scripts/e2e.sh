@@ -11,9 +11,11 @@ HOSTPART="${BASE#*@}"
 
 if curl -fs -o /dev/null http://127.0.0.1:3901/login || curl -fs -o /dev/null http://127.0.0.1:3900/health; then echo 'Puertos 3900/3901 ocupados por otro proceso' >&2; exit 1; fi
 psql "$SUPER_URL" -qc "DROP DATABASE IF EXISTS $DB WITH (FORCE)" -c "CREATE DATABASE $DB"
-export BOOTSTRAP_DATABASE_URL="$BASE/$DB" MIGRATOR_PASSWORD=e2e_m APP_USER_PASSWORD=e2e_a PLATFORM_OPS_PASSWORD=e2e_p
-export MIGRATOR_DATABASE_URL="postgresql://migrator:e2e_m@$HOSTPART/$DB"
-export PLATFORM_DATABASE_URL="postgresql://platform_ops:e2e_p@$HOSTPART/$DB"
+# Los roles son de todo el clúster: se respetan las contraseñas ya definidas en el entorno (CI)
+export MIGRATOR_PASSWORD="${MIGRATOR_PASSWORD:-e2e_m}" APP_USER_PASSWORD="${APP_USER_PASSWORD:-e2e_a}" PLATFORM_OPS_PASSWORD="${PLATFORM_OPS_PASSWORD:-e2e_p}"
+export BOOTSTRAP_DATABASE_URL="$BASE/$DB"
+export MIGRATOR_DATABASE_URL="postgresql://migrator:$MIGRATOR_PASSWORD@$HOSTPART/$DB"
+export PLATFORM_DATABASE_URL="postgresql://platform_ops:$PLATFORM_OPS_PASSWORD@$HOSTPART/$DB"
 cd "$ROOT/apps/api"
 node dist/src/cli/bootstrap.js
 node dist/src/cli/migrate.js
@@ -22,7 +24,7 @@ node dist/src/cli/platform.js create-organization --name Fatboy --slug fatboy --
   --branch VEN=Venecia --branch SMA="San Marcos" --branch AME=Américas \
   --admin-email dueno@fatboy.example --admin-name "Dueño Fatboy" --admin-password 'contraseña-larga-123' >/dev/null
 
-DATABASE_URL="postgresql://app_user:e2e_a@$HOSTPART/$DB" PIN_PEPPER=e2e-pepper-e2e-pepper-e2e-pepper-1234 PORT=3900 node dist/src/main.js > /tmp/e2e-api.log 2>&1 &
+DATABASE_URL="postgresql://app_user:$APP_USER_PASSWORD@$HOSTPART/$DB" PIN_PEPPER=e2e-pepper-e2e-pepper-e2e-pepper-1234 PORT=3900 node dist/src/main.js > /tmp/e2e-api.log 2>&1 &
 API_PID=$!
 cd "$ROOT/apps/web"
 API_INTERNAL_URL=http://127.0.0.1:3900 node node_modules/next/dist/bin/next start -p 3901 > /tmp/e2e-web.log 2>&1 &

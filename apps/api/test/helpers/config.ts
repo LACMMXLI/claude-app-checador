@@ -4,7 +4,16 @@ const superUser = process.env.TEST_PG_SUPERUSER ?? 'postgres';
 const superPassword = process.env.TEST_PG_SUPERPASSWORD ?? 'postgres';
 
 export const TEST_DB = process.env.TEST_PG_DATABASE ?? 'checador_test';
-export const PASSWORDS = { migrator: 'migrator_pw_test', appUser: 'app_user_pw_test', platformOps: 'platform_ops_pw_test' };
+/**
+ * Los roles de PostgreSQL son de TODO el clúster (no por base de datos): el bootstrap de las pruebas
+ * fija sus contraseñas. Si el entorno ya define las del despliegue (CI), se reutilizan para no romper
+ * las demás bases del mismo clúster.
+ */
+export const PASSWORDS = {
+  migrator: process.env.MIGRATOR_PASSWORD ?? 'migrator_pw_test',
+  appUser: process.env.APP_USER_PASSWORD ?? 'app_user_pw_test',
+  platformOps: process.env.PLATFORM_OPS_PASSWORD ?? 'platform_ops_pw_test',
+};
 export const PEPPER = 'test-pepper-0123456789-0123456789-0123456789';
 
 const url = (user: string, password: string, db: string) =>

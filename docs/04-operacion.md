@@ -54,6 +54,10 @@ La base contiene a **todos** los negocios y su auditoría. Respaldos diarios de 
 
 Recuperación de contraseña por correo y envío de invitaciones por correo, kiosco visual, turnos, checadas, jornadas, incidencias, correcciones, reportes, tiempo real (ver `03-arquitectura.md §10`).
 
-## 6. Migraciones que corrigen DATOS
+## 6. Roles de PostgreSQL son de todo el clúster
+
+`migrator`, `app_user`, `platform_ops` y `gate_owner` existen a nivel de **clúster**, no de base de datos: ejecutar el bootstrap contra otra base del mismo servidor **cambia sus contraseñas para todas**. Usa un servidor PostgreSQL por entorno (el de Coolify es solo de producción) y las mismas contraseñas en todos los pasos de un mismo entorno (CI ya lo hace).
+
+## 7. Migraciones que corrigen DATOS
 
 Las tablas de negocio tienen `FORCE ROW LEVEL SECURITY` (aplica también a `migrator`). Para corregir datos dentro de una migración: `ALTER TABLE x NO FORCE ROW LEVEL SECURITY; …; ALTER TABLE x FORCE ROW LEVEL SECURITY;` en la misma migración (transacción). Ver `0006`.
