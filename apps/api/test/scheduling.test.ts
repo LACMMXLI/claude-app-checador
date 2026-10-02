@@ -310,3 +310,65 @@ describe('próximos turnos de un empleado', () => {
     expect(new Set(list.map((s) => s.scheduleStatus))).toEqual(new Set(['DRAFT', 'PUBLISHED']));
   });
 });
+
+describe('D-33 · un turno publicado nunca se vuelve borrador implícitamente', () => {
+  const schedulesOf = async (branchId: string, weekStart: string) =>
+    (await pools.platform.query(`SELECT status FROM scheduling.weekly_schedules WHERE organization_id = $1 AND branch_id = $2 AND week_start = $3`, [F.orgId, branchId, weekStart])).rows;
+
+  it('(49) mover un turno PUBLICADO a otra sucursal o semana exige un horario destino existente y PUBLICADO', async () => {
+    await world.employees.assignBranch(F.ctx, F.maria, { branchId: F.SMA, kind: 'TEMPORARY', validFrom: '2027-01-11', validTo: '2027-01-31', reason: 'Apoyo' });
+    const s = await S.createShift(F.ctx, F.admin, shift(F.maria, F.VEN, '2027-01-12', '07:00', '15:00'));
+    const week = await S.getWeek(F.ctx, F.admin, F.VEN, '2027-01-12');
+    await S.publish(F.ctx, F.admin, week.schedule!.id, week.schedule!.version);
+
+    // destino inexistente: NO se crea un borrador silencioso
+    const missing = await S.updateShift(F.ctx, F.admin, s.id, s.version, { branchId: F.SMA }).catch((e) => e);
+    expect(missing).toMatchObject({ code: 'SHIFT_TARGET_SCHEDULE_NOT_PUBLISHED', details: { branchId: F.SMA, weekStart: '2027-01-11', targetStatus: null } });
+    expect(await schedulesOf(F.SMA, '2027-01-11')).toEqual([]);
+    // otra semana sin horario tampoco
+    await expect(S.updateShift(F.ctx, F.admin, s.id, s.version, { date: '2027-01-19' })).rejects.toMatchObject({ code: 'SHIFT_TARGET_SCHEDULE_NOT_PUBLISHED' });
+    expect(await schedulesOf(F.VEN, '2027-01-18')).toEqual([]);
+
+    // destino en BORRADOR: también se rechaza
+    await S.ensureSchedule(F.ctx, F.admin, F.SMA, '2027-01-12');
+    const draft = await S.updateShift(F.ctx, F.admin, s.id, s.version, { branchId: F.SMA }).catch((e) => e);
+    expect(draft).toMatchObject({ code: 'SHIFT_TARGET_SCHEDULE_NOT_PUBLISHED', details: { targetStatus: 'DRAFT' } });
+    expect(await row(s.id)).toMatchObject({ branch_id: F.VEN, schedule_id: week.schedule!.id, version: s.version }); // intacto
+
+    // destino PUBLICADO: se mueve y sigue siendo oficial
+    const sma = await S.getWeek(F.ctx, F.admin, F.SMA, '2027-01-12');
+    await S.publish(F.ctx, F.admin, sma.schedule!.id, sma.schedule!.version);
+    const moved = await S.updateShift(F.ctx, F.admin, s.id, s.version, { branchId: F.SMA });
+    expect(moved).toMatchObject({ branchId: F.SMA, scheduleId: sma.schedule!.id, scheduleStatus: 'PUBLISHED', status: 'SCHEDULED' });
+    // y dentro del mismo horario publicado se sigue editando normalmente
+    const edited = await S.updateShift(F.ctx, F.admin, s.id, moved.version, { startTime: '08:00', endTime: '16:00' });
+    expect(edited).toMatchObject({ scheduleStatus: 'PUBLISHED', startTime: '08:00' });
+  });
+
+  it('un turno en BORRADOR sí puede crear el horario destino en borrador', async () => {
+    const s = await S.createShift(F.ctx, F.admin, shift(F.maria, F.VEN, '2027-01-26', '07:00', '15:00'));
+    expect(s.scheduleStatus).toBe('DRAFT');
+    expect(await schedulesOf(F.SMA, '2027-01-25')).toEqual([]);
+    const moved = await S.updateShift(F.ctx, F.admin, s.id, s.version, { branchId: F.SMA });
+    expect(moved).toMatchObject({ branchId: F.SMA, scheduleStatus: 'DRAFT' });
+    expect(await schedulesOf(F.SMA, '2027-01-25')).toEqual([{ status: 'DRAFT' }]);
+  });
+
+  it('PostgreSQL también lo impide aunque se salte la aplicación', async () => {
+    const draftVen = await S.ensureSchedule(F.ctx, F.admin, F.VEN, '2027-02-02');
+    const published = (await pools.platform.query(
+      `SELECT s.id FROM scheduling.shifts s JOIN scheduling.weekly_schedules w ON w.id = s.schedule_id
+        WHERE s.organization_id = $1 AND s.branch_id = $2 AND w.status = 'PUBLISHED' AND s.status = 'SCHEDULED' LIMIT 1`, [F.orgId, F.SMA])).rows[0].id;
+    const sameBranchDraft = await S.ensureSchedule(F.ctx, F.admin, F.SMA, '2027-02-02');
+    const c = await pools.platform.connect();
+    try {
+      await c.query('BEGIN');
+      const err = await pgError(c, `UPDATE scheduling.shifts SET schedule_id = $1 WHERE id = $2`, [sameBranchDraft.id, published]);
+      expect(err).toMatchObject({ code: 'P0001', message: 'SHIFT_TARGET_SCHEDULE_NOT_PUBLISHED' });
+      await c.query('ROLLBACK');
+    } finally {
+      c.release();
+    }
+    expect(draftVen.status).toBe('DRAFT');
+  });
+});

@@ -16,7 +16,11 @@ interface Grant {
  * una asignación con varias filas de alcance.
  */
 export class AccessProfile {
-  constructor(private readonly grants: readonly Grant[]) {}
+  constructor(
+    private readonly grants: readonly Grant[],
+    /** Ficha de empleado ligada a la membresía (D-15), para impedir corregir la propia jornada (D-18). */
+    public readonly employeeId: string | null = null,
+  ) {}
 
   /** ¿Tiene el permiso (en esa sucursal, si se indica)? */
   can(permission: string, branchId?: string): boolean {
@@ -80,7 +84,7 @@ export class RbacService {
     if (!membership || membership.status !== 'ACTIVE') return new AccessProfile([]);
 
     const assignments = await tx.select().from(roleAssignments).where(eq(roleAssignments.membershipId, membershipId));
-    if (assignments.length === 0) return new AccessProfile([]);
+    if (assignments.length === 0) return new AccessProfile([], membership.employeeId);
 
     const perms = await tx
       .select()
@@ -96,6 +100,7 @@ export class RbacService {
         permissions: new Set(perms.filter((p) => p.roleId === a.roleId).map((p) => p.permissionCode)),
         branchIds: a.scope === 'ORGANIZATION' ? null : new Set(branchRows.filter((b) => b.assignmentId === a.id).map((b) => b.branchId)),
       })),
+      membership.employeeId,
     );
   }
 }

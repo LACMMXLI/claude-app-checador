@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { toLocal } from '../../src/common/zoned-time.js';
 import pg from 'pg';
 import { PlatformDb } from '../../src/common/tenancy/platform-db.js';
 import type { TenantContext } from '../../src/common/tenancy/tenant-context.js';
@@ -50,6 +51,7 @@ export interface SeededOrg extends ProvisionedOrganization {
   branchB: string;
   shiftId: string;
   templateId: string;
+  workSessionId: string;
 }
 
 /**
@@ -119,6 +121,19 @@ export async function seedOrganization(world: World, opts: { timezone?: string; 
   const template = await world.templates.create(adminCtx, access, { branchId: branchA, name: 'Base' });
   await world.templates.replaceEntries(adminCtx, access, template.id, template.version, [{ employeeId: employee.id, weekday: 1, startTime: '07:00', endTime: '15:00' }]);
 
+  // Asistencia: una jornada real desde el kiosco (Entrada, comida, regreso, Salida), sus incidencias y una corrección
+  await world.policies.setOverride(adminCtx, 'ORGANIZATION', null, { debounceSec: 0 });
+  const device = { deviceId: kiosk.deviceId, branchId: branchA };
+  const { ticket } = await world.kioskAttendance.identify(kioskCtx, device, pin);
+  const punch = (action: 'CLOCK_IN' | 'BREAK_START' | 'BREAK_END' | 'CLOCK_OUT') =>
+    world.kioskAttendance.punch(kioskCtx, device, { ticket, action, clientEventId: randomUUID() });
+  const clockIn = await punch('CLOCK_IN');
+  await punch('BREAK_START');
+  await punch('BREAK_END');
+  await punch('CLOCK_OUT');
+  const earlier = toLocal(new Date(Date.now() - 5 * 60_000), opts.timezone ?? 'America/Tijuana');
+  await world.corrections.apply(adminCtx, access, clockIn.workSessionId, 4, { action: 'SET_CLOCK_IN', at: { date: earlier.date, time: earlier.time } }, 'Llegó antes; el kiosco estaba ocupado');
+
   // Overrides de política en los tres niveles
   await world.policies.setOverride(adminCtx, 'ORGANIZATION', null, { breakAllowedMin: 35, weekStartDay: 1 });
   await world.policies.setOverride(adminCtx, 'BRANCH', branchB, { breakAllowedMin: 40 });
@@ -139,5 +154,6 @@ export async function seedOrganization(world: World, opts: { timezone?: string; 
     branchB,
     shiftId: shift.id,
     templateId: template.id,
+    workSessionId: clockIn.workSessionId,
   };
 }

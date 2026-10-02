@@ -4,7 +4,7 @@ import { DomainError } from '../../common/errors.js';
 import type { Gate } from '../../common/tenancy/gate.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
-import { branches, kioskDevices, kioskPairingCodes } from '../../db/schema/index.js';
+import { branches, kioskDevices, kioskPairingCodes, organizations } from '../../db/schema/index.js';
 import type { AuditService } from '../audit/audit.service.js';
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
@@ -92,6 +92,48 @@ export class KioskDevicesService {
       throw new DomainError('KIOSK_TOKEN_INVALID');
     }
     return { deviceId: record.deviceId, organizationId: record.organizationId, branchId: record.branchId };
+  }
+
+  /**
+   * D-56 · Activación del navegador del kiosco. Acepta el token completo (mostrado una vez en el panel) o un
+   * código de emparejamiento. El servidor ROTA la credencial: el token que se pegó deja de servir (uso único,
+   * no sirve para activar un segundo equipo) y la credencial nueva solo viaja en una cookie HttpOnly.
+   */
+  async activate(credential: string, deviceName = 'Kiosco'): Promise<{ token: string } & KioskIdentity> {
+    const value = credential.trim();
+    if (!value.startsWith('kt_')) return this.redeem(value, deviceName);
+    const identity = await this.authenticate(value);
+    const parsed = parseKioskToken(value)!;
+    const t = newToken();
+    const ctx = this.contextFor(identity);
+    await this.tenantDb.run(ctx, async (tx) => {
+      const [rotated] = await tx
+        .update(kioskDevices)
+        .set({ tokenPrefix: t.prefix, tokenHash: t.hash, tokenIssuedAt: new Date(), tokenRevokedAt: null })
+        .where(and(eq(kioskDevices.id, identity.deviceId), eq(kioskDevices.tokenHash, sha256(parsed.secret))))
+        .returning();
+      if (!rotated) throw new DomainError('KIOSK_TOKEN_INVALID'); // otro navegador lo activó al mismo tiempo
+      await this.audit.record(tx, ctx, { action: 'kiosk.activated', entityType: 'kiosk_device', entityId: identity.deviceId, branchId: identity.branchId, after: { tokenRotated: true } });
+    });
+    return { token: t.token, ...identity };
+  }
+
+  /** Lo que el kiosco necesita mostrar: negocio (nombre, marca), sucursal y dispositivo. Nada administrativo. */
+  async describe(identity: KioskIdentity) {
+    return this.tenantDb.run(this.contextFor(identity), async (tx) => {
+      const [row] = await tx
+        .select({ orgName: organizations.name, branding: organizations.branding, orgTz: organizations.timezone, branchName: branches.name, branchTz: branches.timezone, deviceName: kioskDevices.name })
+        .from(kioskDevices)
+        .innerJoin(branches, eq(branches.id, kioskDevices.branchId))
+        .innerJoin(organizations, eq(organizations.id, kioskDevices.organizationId))
+        .where(eq(kioskDevices.id, identity.deviceId));
+      if (!row) throw new DomainError('KIOSK_TOKEN_INVALID');
+      return {
+        organization: { name: row.orgName, branding: row.branding },
+        branch: { id: identity.branchId, name: row.branchName, timezone: row.branchTz ?? row.orgTz },
+        device: { id: identity.deviceId, name: row.deviceName },
+      };
+    });
   }
 
   /** Contexto de negocio de un kiosco (actor KIOSK). */

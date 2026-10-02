@@ -1,6 +1,6 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { Response } from 'express';
-import { DomainError, isPgError } from '../common/errors.js';
+import { DomainError, isPgError, raisedCode } from '../common/errors.js';
 
 const STATUS: Record<string, number> = {
   UNAUTHENTICATED: 401,
@@ -15,8 +15,12 @@ const STATUS: Record<string, number> = {
   PIN_PAUSED: 429,
   INVALID_PIN: 401,
   SHIFT_HISTORY_LOCKED: 403,
+  SELF_CORRECTION_FORBIDDEN: 403,
+  PUNCH_TOO_SOON: 429,
+  KIOSK_TICKET_INVALID: 401,
+  KIOSK_NOT_ACTIVATED: 401,
 };
-const CONFLICTS = /(_TAKEN|ALREADY_MEMBER|LAST_ADMIN|_OVERLAP|ALREADY_ACTIVE|_VERSION_CONFLICT|ALREADY_PUBLISHED|_NOT_DRAFT|_CANCELLED|USE_CANCEL|_DUPLICATE_ENTRY)$/;
+const CONFLICTS = /(_TAKEN|ALREADY_MEMBER|LAST_ADMIN|_OVERLAP|ALREADY_ACTIVE|_VERSION_CONFLICT|ALREADY_PUBLISHED|_NOT_DRAFT|_CANCELLED|USE_CANCEL|_DUPLICATE_ENTRY|_NOT_PUBLISHED|_HAS_ATTENDANCE|_NOT_OFFICIAL|_ALREADY_CLOSED|BREAK_OPEN|_ALREADY_OPEN|NO_OPEN_|_NOT_ALLOWED_NOW|IDEMPOTENCY_KEY_REUSED|_ALREADY_RESOLVED|MAX_BREAKS_REACHED|_IN_REVIEW)$/;
 
 /**
  * Respuesta uniforme `{ error: { code, details } }` con códigos estables (el cliente los traduce).
@@ -28,6 +32,8 @@ export class ErrorsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const res = host.switchToHttp().getResponse<Response>();
+    const raised = raisedCode(exception);
+    if (raised) exception = new DomainError(raised); // invariante de PostgreSQL ⇒ mismo trato que un error de dominio
     if (exception instanceof DomainError) {
       const status = STATUS[exception.code] ?? (exception.code.endsWith('_NOT_FOUND') ? 404 : CONFLICTS.test(exception.code) ? 409 : 400);
       res.status(status).json({ error: { code: exception.code, details: exception.details } });

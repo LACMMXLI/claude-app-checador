@@ -7,7 +7,9 @@ import { AuditController } from './http/controllers/audit.controller.js';
 import { AuthController } from './http/controllers/auth.controller.js';
 import { BranchesController } from './http/controllers/branches.controller.js';
 import { EmployeesController } from './http/controllers/employees.controller.js';
-import { KioskDeviceController, KiosksController } from './http/controllers/kiosks.controller.js';
+import { AttendanceController } from './http/controllers/attendance.controller.js';
+import { KioskDeviceController } from './http/controllers/kiosk-device.controller.js';
+import { KiosksController } from './http/controllers/kiosks.controller.js';
 import { MembersController } from './http/controllers/members.controller.js';
 import { PoliciesController } from './http/controllers/policies.controller.js';
 import { SchedulesController } from './http/controllers/schedules.controller.js';
@@ -39,6 +41,7 @@ export class AppModule {
         PoliciesController,
         AuditController,
         SchedulesController,
+        AttendanceController,
       ],
       providers: [
         { provide: PG_POOL, useValue: options.pool },
@@ -56,10 +59,11 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 /**
  * Defensa CSRF para la cookie de sesión: toda petición que modifica estado debe traer la cabecera
  * `X-Requested-With: checador` (un formulario de otro sitio no puede enviarla sin preflight CORS).
- * La API del dispositivo usa `Authorization: Bearer` (sin cookie) y queda fuera.
+ * Solo quedan fuera las peticiones con `Authorization: Bearer` (integraciones del dispositivo, sin cookie): el
+ * navegador del kiosco usa una cookie (D-56) y por eso también exige la cabecera.
  */
 export function csrfGuard(req: Request, res: Response, next: NextFunction) {
-  if (SAFE_METHODS.has(req.method) || req.path.startsWith('/api/kiosk/')) return next();
+  if (SAFE_METHODS.has(req.method) || (req.path.startsWith('/api/kiosk/') && (req.header('authorization') ?? '').startsWith('Bearer '))) return next();
   if (req.header('x-requested-with') !== 'checador') {
     res.status(403).json({ error: { code: 'CSRF_CHECK_FAILED', details: {} } });
     return;

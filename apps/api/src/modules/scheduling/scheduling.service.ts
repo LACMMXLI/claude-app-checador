@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
-import { DomainError, isPgError } from '../../common/errors.js';
+import { DomainError, isPgError, raisedCode } from '../../common/errors.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
 import { effectiveTimezone } from '../../common/time.js';
@@ -428,6 +428,16 @@ export class SchedulingService {
           reason,
           fixed: timeChanged ? undefined : { startsAt: before.startsAt, endsAt: before.endsAt, businessDate: before.businessDate },
         });
+        // D-33: un turno OFICIAL (horario publicado) nunca se mueve a un horario que no esté publicado.
+        if (scheduleStatus === 'PUBLISHED') {
+          const [existing] = await tx
+            .select({ id: weeklySchedules.id, status: weeklySchedules.status })
+            .from(weeklySchedules)
+            .where(and(eq(weeklySchedules.branchId, target.branchId), eq(weeklySchedules.weekStart, weekStart)));
+          if (!existing || existing.status !== 'PUBLISHED') {
+            throw new DomainError('SHIFT_TARGET_SCHEDULE_NOT_PUBLISHED', { branchId: target.branchId, weekStart, targetStatus: existing?.status ?? null });
+          }
+        }
         const schedule = await this.scheduleFor(tx, ctx, target.branchId, weekStart);
         scheduleId = schedule.id;
         scheduleStatus = schedule.status;
@@ -452,6 +462,10 @@ export class SchedulingService {
           .returning();
       } catch (error) {
         if (isPgError(error, '23P01')) throw new DomainError('SHIFT_OVERLAP', { conflicts: [] });
+        // un turno con jornada real no cambia de empleado ni de sucursal (FK compuesta de la jornada)
+        if (isPgError(error, '23503', 'work_session_shift_fk')) throw new DomainError('SHIFT_HAS_ATTENDANCE');
+        const raised = raisedCode(error);
+        if (raised) throw new DomainError(raised);
         throw error;
       }
       if (!after) throw new DomainError('SHIFT_VERSION_CONFLICT');
@@ -485,7 +499,11 @@ export class SchedulingService {
         .update(shifts)
         .set({ status: 'CANCELLED', cancelledAt: this.clock(), cancelledBy: ctx.actor.userId ?? null, cancelReason: reason.trim(), version: before.version + 1, updatedBy: ctx.actor.userId ?? null })
         .where(and(eq(shifts.id, shiftId), eq(shifts.version, expectedVersion)))
-        .returning();
+        .returning()
+        .catch((error: unknown) => {
+          const raised = raisedCode(error); // p. ej. SHIFT_HAS_ATTENDANCE: lo ya trabajado no desaparece del plan
+          throw raised ? new DomainError(raised) : error;
+        });
       if (!after) throw new DomainError('SHIFT_VERSION_CONFLICT');
       await this.bumpSchedule(tx, before.scheduleId);
       await this.audit.record(tx, ctx, {

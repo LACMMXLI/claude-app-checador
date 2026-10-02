@@ -23,6 +23,7 @@ const auth = pgSchema('auth');
 const core = pgSchema('core');
 const audit = pgSchema('audit');
 const scheduling = pgSchema('scheduling');
+const attendance = pgSchema('attendance');
 
 const tstz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -38,7 +39,7 @@ export const policyDefaults = platform.table('policy_defaults', {
   earlyEntryWindowMin: integer('early_entry_window_min').notNull(),
   absentAfterMin: integer('absent_after_min').notNull(),
   operationalCutoff: time('operational_cutoff').notNull(),
-  maxHoursUnscheduled: integer('max_hours_unscheduled').notNull(),
+  maxOpenSessionMinutes: integer('max_open_session_minutes').notNull(),
   debounceSec: integer('debounce_sec').notNull(),
   pinMaxAttempts: integer('pin_max_attempts').notNull(),
   pinLockoutSec: integer('pin_lockout_sec').notNull(),
@@ -256,7 +257,7 @@ export const policyOverrides = core.table('policy_overrides', {
   earlyEntryWindowMin: integer('early_entry_window_min'),
   absentAfterMin: integer('absent_after_min'),
   operationalCutoff: time('operational_cutoff'),
-  maxHoursUnscheduled: integer('max_hours_unscheduled'),
+  maxOpenSessionMinutes: integer('max_open_session_minutes'),
   debounceSec: integer('debounce_sec'),
   pinMaxAttempts: integer('pin_max_attempts'),
   pinLockoutSec: integer('pin_lockout_sec'),
@@ -350,4 +351,97 @@ export const scheduleTemplateEntries = scheduling.table('schedule_template_entri
   startLocal: time('start_local').notNull(),
   endLocal: time('end_local').notNull(),
   createdAt: tstz('created_at').notNull().defaultNow(),
+});
+
+// ── attendance (Fase 3) ────────────────────────────────────────────────────────
+export const workSessions = attendance.table('work_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  branchId: uuid('branch_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  shiftId: uuid('shift_id'),
+  operationalDate: date('operational_date', { mode: 'string' }).notNull(),
+  startedAt: tstz('started_at').notNull(),
+  endedAt: tstz('ended_at'),
+  status: text('status').notNull().default('OPEN'),
+  origin: text('origin').notNull(),
+  policySnapshot: jsonb('policy_snapshot').notNull().default({}),
+  version: integer('version').notNull().default(1),
+  createdBy: uuid('created_by'),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const breaks = attendance.table('breaks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  workSessionId: uuid('work_session_id').notNull(),
+  sequence: smallint('sequence').notNull(),
+  startedAt: tstz('started_at').notNull(),
+  endedAt: tstz('ended_at'),
+  allowedMinutes: integer('allowed_minutes').notNull(),
+  toleranceMinutes: integer('tolerance_minutes').notNull().default(0),
+  durationMinutes: integer('duration_minutes').generatedAlwaysAs(sql`CASE WHEN ended_at IS NULL THEN NULL ELSE attendance.minutes_between(started_at, ended_at) END`),
+  exceededMinutes: integer('exceeded_minutes').generatedAlwaysAs(sql`CASE WHEN ended_at IS NULL THEN NULL ELSE GREATEST(0, attendance.minutes_between(started_at, ended_at) - allowed_minutes - tolerance_minutes) END`),
+  origin: text('origin').notNull(),
+  version: integer('version').notNull().default(1),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const attendanceEvents = attendance.table('events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  branchId: uuid('branch_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  workSessionId: uuid('work_session_id').notNull(),
+  breakId: uuid('break_id'),
+  type: text('type').notNull(),
+  clientEventId: uuid('client_event_id').notNull(),
+  deviceId: uuid('device_id').notNull(),
+  occurredAt: tstz('occurred_at').notNull(),
+  receivedAt: tstz('received_at').notNull().defaultNow(),
+  source: text('source').notNull().default('KIOSK_ONLINE'),
+  timeSource: text('time_source').notNull().default('SERVER'),
+});
+
+export const incidents = attendance.table('incidents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  branchId: uuid('branch_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  workSessionId: uuid('work_session_id'),
+  shiftId: uuid('shift_id'),
+  operationalDate: date('operational_date', { mode: 'string' }).notNull(),
+  type: text('type').notNull(),
+  status: text('status').notNull().default('OPEN'),
+  details: jsonb('details').notNull().default({}),
+  detectedAt: tstz('detected_at').notNull().defaultNow(),
+  detectedBy: text('detected_by').notNull(),
+  resolution: text('resolution'),
+  resolvedAt: tstz('resolved_at'),
+  resolvedBy: uuid('resolved_by'),
+  resolutionReason: text('resolution_reason'),
+  resolutionCorrectionId: uuid('resolution_correction_id'),
+  version: integer('version').notNull().default(1),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const corrections = attendance.table('corrections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  branchId: uuid('branch_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  workSessionId: uuid('work_session_id').notNull(),
+  breakId: uuid('break_id'),
+  incidentId: uuid('incident_id'),
+  action: text('action').notNull(),
+  originalValue: jsonb('original_value'),
+  correctedValue: jsonb('corrected_value').notNull(),
+  before: jsonb('before'),
+  after: jsonb('after').notNull(),
+  reason: text('reason').notNull(),
+  correctedBy: uuid('corrected_by').notNull(),
+  correctedAt: tstz('corrected_at').notNull().defaultNow(),
 });

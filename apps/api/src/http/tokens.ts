@@ -8,3 +8,5 @@ export interface HttpConfig {
 }
 
 export const sessionCookieName = (cfg: HttpConfig) => (cfg.secureCookies ? '__Host-sid' : 'sid');
+/** Credencial del navegador del kiosco (D-56): HttpOnly, nunca en localStorage. */
+export const kioskCookieName = (cfg: HttpConfig) => (cfg.secureCookies ? '__Host-kiosk' : 'kiosk');

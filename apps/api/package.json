@@ -13,6 +13,7 @@
     "db:migrate": "tsx src/cli/migrate.ts",
     "check:tenancy": "tsx src/cli/check-tenancy.ts",
     "platform": "tsx src/cli/platform.ts",
+    "reconcile": "tsx src/cli/reconcile.ts",
     "start:prod:init": "node dist/src/cli/bootstrap.js && node dist/src/cli/migrate.js"
   },
   "dependencies": {

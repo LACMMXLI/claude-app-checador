@@ -42,6 +42,7 @@ describe('aislamiento entre negocios — cobertura', () => {
         'core.invitations', 'core.kiosk_pairing_codes', 'core.organization_memberships', 'core.pin_attempts', 'core.policy_overrides',
         'core.role_assignment_branches', 'core.role_assignments', 'core.role_permissions', 'core.roles',
         'scheduling.schedule_template_entries', 'scheduling.schedule_templates', 'scheduling.shifts', 'scheduling.weekly_schedules',
+        'attendance.breaks', 'attendance.corrections', 'attendance.events', 'attendance.incidents', 'attendance.work_sessions',
       ]),
     );
     for (const t of tables) {
@@ -57,7 +58,8 @@ describe('aislamiento negocio A ↔ negocio B — LECTURA y ESCRITURA en cada ta
   it.each(['audit.audit_log', 'core.branches', 'core.employee_branch_assignments', 'core.employees', 'core.invitations', 'core.kiosk_devices',
     'core.kiosk_pairing_codes', 'core.organization_memberships', 'core.pin_attempts', 'core.policy_overrides',
     'core.role_assignment_branches', 'core.role_assignments', 'core.role_permissions', 'core.roles',
-    'scheduling.schedule_template_entries', 'scheduling.schedule_templates', 'scheduling.shifts', 'scheduling.weekly_schedules'])('%s', async (table) => {
+    'scheduling.schedule_template_entries', 'scheduling.schedule_templates', 'scheduling.shifts', 'scheduling.weekly_schedules',
+    'attendance.breaks', 'attendance.corrections', 'attendance.events', 'attendance.incidents', 'attendance.work_sessions'])('%s', async (table) => {
     expect(tables).toContain(table);
     const totalA = await count(pools.platform, `SELECT count(*) FROM ${table} WHERE organization_id = $1`, [A.organizationId]);
     const columns = await insertableColumns(table);

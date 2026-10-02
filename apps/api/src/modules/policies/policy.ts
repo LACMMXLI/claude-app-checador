@@ -32,7 +32,7 @@ export const POLICY_PARAMS = {
   earlyEntryWindowMin: { schema: int(0, 720), scopes: UP_TO_BRANCH },
   absentAfterMin: { schema: int(1, 720), scopes: UP_TO_BRANCH },
   operationalCutoff: { schema: time, scopes: UP_TO_BRANCH },
-  maxHoursUnscheduled: { schema: int(1, 48), scopes: UP_TO_BRANCH },
+  maxOpenSessionMinutes: { schema: int(60, 2880), scopes: UP_TO_BRANCH },
   debounceSec: { schema: int(0, 3600), scopes: UP_TO_BRANCH },
   pinMaxAttempts: { schema: int(1, 20), scopes: UP_TO_BRANCH },
   pinLockoutSec: { schema: int(1, 300), scopes: UP_TO_BRANCH },
@@ -55,7 +55,8 @@ export interface EffectivePolicy {
   earlyEntryWindowMin: number;
   absentAfterMin: number;
   operationalCutoff: string;
-  maxHoursUnscheduled: number;
+  /** D-48: jornada sin turno abierta más de esto ⇒ requiere corrección (nunca se inventa la salida). */
+  maxOpenSessionMinutes: number;
   debounceSec: number;
   pinMaxAttempts: number;
   pinLockoutSec: number;

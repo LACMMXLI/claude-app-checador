@@ -194,7 +194,7 @@ const esMX = {
   'policy.earlyEntryWindowMin': 'Entrada anticipada permitida (min)',
   'policy.absentAfterMin': '"Ausente" después de (min)',
   'policy.operationalCutoff': 'Hora de corte operativo',
-  'policy.maxHoursUnscheduled': 'Máx. horas jornada sin turno',
+  'policy.maxOpenSessionMinutes': 'Máx. minutos de jornada sin turno abierta',
   'policy.debounceSec': 'Antirrebote de checada (s)',
   'policy.pinMaxAttempts': 'Fallos de PIN antes de pausa',
   'policy.pinLockoutSec': 'Pausa inicial del kiosco (s)',

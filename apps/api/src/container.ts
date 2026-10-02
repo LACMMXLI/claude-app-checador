@@ -15,6 +15,11 @@ import { EmployeesService } from './modules/core/employees.service.js';
 import { PoliciesService } from './modules/policies/policies.service.js';
 import { SchedulingService } from './modules/scheduling/scheduling.service.js';
 import { TemplatesService } from './modules/scheduling/templates.service.js';
+import { AttendanceQueryService } from './modules/attendance/attendance-query.service.js';
+import { CorrectionsService } from './modules/attendance/corrections.service.js';
+import { KioskAttendanceService } from './modules/attendance/kiosk-attendance.service.js';
+import { KioskTickets } from './modules/attendance/kiosk-ticket.js';
+import { ReconcilerService } from './modules/attendance/reconciler.service.js';
 
 export interface ContainerOptions {
   /** Pool del rol `app_user` (NOBYPASSRLS). */
@@ -40,6 +45,8 @@ export function createContainer(options: ContainerOptions) {
   });
   const auth = new AuthService(gate);
   const scheduling = new SchedulingService(tenantDb, audit, policies, options.clock);
+  const kioskIdentification = new KioskIdentificationService(tenantDb, employees, policies, audit, options.clock);
+  const reconciler = new ReconcilerService(tenantDb, gate, audit, policies, options.clock);
   return {
     tenantDb,
     gate,
@@ -56,7 +63,12 @@ export function createContainer(options: ContainerOptions) {
     scheduling,
     templates: new TemplatesService(tenantDb, audit, scheduling),
     kiosks: new KioskDevicesService(tenantDb, gate, audit),
-    kioskIdentification: new KioskIdentificationService(tenantDb, employees, policies, audit, options.clock),
+    kioskIdentification,
+    reconciler,
+    // El pase corto del kiosco se firma con una clave DERIVADA del secreto del servidor (separación de dominio).
+    kioskAttendance: new KioskAttendanceService(tenantDb, audit, policies, kioskIdentification, reconciler, new KioskTickets(options.pinPepper), options.clock),
+    corrections: new CorrectionsService(tenantDb, audit, policies, options.clock),
+    attendanceQuery: new AttendanceQueryService(tenantDb, policies, options.clock),
   };
 }
 export type Container = ReturnType<typeof createContainer>;
