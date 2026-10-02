@@ -1,4 +1,4 @@
-# 04 · Operación (Fases 0–2)
+# 04 · Operación (Fases 0–3)
 
 ## 1. Desarrollo local
 
@@ -31,12 +31,19 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
 7. Suspender/reactivar un negocio: `... platform set-status --slug fatboy --status SUSPENDED|ACTIVE`.
 
 8. Dar de alta usuarios: desde el panel → **Usuarios → Invitar**. El enlace se muestra una sola vez; entrégalo a la persona (aún no se envían correos).
+9. **Kioscos (tablets):** Panel → **Kioscos → Nuevo kiosco** (elige la sucursal). Copia el token (se muestra una vez). En la tablet abre `https://<dominio>/kiosco`, pega el token y pulsa **Activar** (también sirve un código de emparejamiento). El token queda inutilizado: la tablet recibe su propia credencial en una cookie segura. Para retirar una tablet: **Revocar token** o **Desactivar**; deja de checar en la siguiente petición.
+10. **Reconciliación de asistencia** (faltas, salidas olvidadas, jornadas abiertas largas, pausas sin regreso). Es idempotente; elige UNA opción (o ambas, no se duplica nada):
+    - Tarea programada de Coolify (recomendado, p. ej. cada 5 minutos) en el servicio `api`: `node dist/src/cli/reconcile.js`; o con compose: `docker compose --profile tools run --rm reconcile`.
+    - Dentro de la API: `RECONCILE_INTERVAL_SEC=300`.
+    La salida es una línea JSON con lo procesado (`absences`, `forgottenExits`, `longOpenSessions`, `openBreaks`, `errors`); termina con código 1 si algún negocio falló.
 
 ## 2.1 Antes de producción
 
 - Validación en el servidor (Coolify): construir `apps/api/Dockerfile` y `apps/web/Dockerfile`, `docker compose up` con base limpia, migraciones (`init`), API sana (`/health`), panel por HTTPS con cookie `__Host-sid`, persistencia y reinicios.
 - GitHub Actions en verde (lo está desde el run #5). Mantenerlo en verde es requisito para cada despliegue.
 - La migración `0007` agrega permisos de planificación a los roles `ADMIN`/`ENCARGADO` existentes y la política de duración de turnos.
+- La migración `0008` crea el esquema `attendance`, el trigger de D-33 y renombra la política `max_hours_unscheduled` → `max_open_session_minutes` (960). La cookie del kiosco usa `__Host-kiosk` con `COOKIE_SECURE=true` (HTTPS obligatorio, igual que el panel).
+- Antirrebote: por defecto 60 s entre checadas del mismo empleado (Políticas → "Antirrebote de checada"). Para probar el flujo completo rápidamente puede bajarse a 0 y volver a 60 después.
 
 ## 3. Respaldos (crítico)
 
@@ -53,7 +60,7 @@ La base contiene a **todos** los negocios y su auditoría. Respaldos diarios de 
 
 ## 5. Qué NO está todavía
 
-Recuperación de contraseña por correo y envío de invitaciones por correo, kiosco visual, checadas, jornadas, incidencias, correcciones de asistencia, reportes, tiempo real (ver `03-arquitectura.md §10`).
+Recuperación de contraseña por correo y envío de invitaciones por correo, reportes y exportación, tiempo real por SSE, solicitudes de corrección con aprobación, modo offline del kiosco, nómina (ver `03-arquitectura.md §10`).
 
 ## 6. Roles de PostgreSQL son de todo el clúster
 

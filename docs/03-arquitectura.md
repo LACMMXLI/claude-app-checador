@@ -1,6 +1,6 @@
 # 03 · Arquitectura
 
-> **Versión 1.2 — CONGELADA.** Estado: **Fases 0, 1 y 2 implementadas y probadas** (ver §10). CI de GitHub Actions en verde. La validación con Docker/Coolify la realiza el dueño en su servidor (§9).
+> **Versión 1.3 — CONGELADA.** Estado: **Fases 0, 1, 2 y 3 implementadas y probadas** (ver §10). CI de GitHub Actions en verde. La validación con Docker/Coolify la realiza el dueño en su servidor (§9).
 
 ## 1. Resumen
 
@@ -12,10 +12,10 @@
 | Base de datos | **PostgreSQL 16** — RLS, constraints, índices parciales, exclusiones (`btree_gist`), triggers | Fase 0 completa |
 | Acceso a datos | **Drizzle ORM** para consultas tipadas; **migraciones SQL propias** como fuente de verdad | Fase 0 |
 | Validación | **Zod** | Fase 0 |
-| Frontend | **Next.js 16 + React 19**, CSS propio (sin framework visual todavía); panel funcional responsive; textos por **sistema de traducciones** (es-MX). El panel reenvía `/api/*` a la API (proxy del mismo origen) | Fase 1: panel. Kiosco visual: Fase 3 |
+| Frontend | **Next.js 16 + React 19**, CSS propio (sin framework visual todavía); panel funcional responsive; textos por **sistema de traducciones** (es-MX). El panel reenvía `/api/*` a la API (proxy del mismo origen) | Fase 1: panel. Fase 3: kiosco táctil (`/kiosco`) y asistencia |
 | Tiempo real | **SSE** | Fase 4 |
 | Excel | `exceljs` | Fase 6 |
-| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel) | 223 pruebas + 2 E2E |
+| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel y del kiosco) | 309 pruebas + 5 E2E |
 | CI | GitHub Actions: typecheck → build → migraciones desde cero → `check:tenancy` → pruebas → smoke | Fase 0 |
 
 **Por qué NestJS y no solo rutas API de Next.js:** módulos que crecerán (mesas, adelantos, nómina, comunicados), procesos en segundo plano con scheduler, tiempo real con estado en memoria, múltiples clientes (kiosco, panel, móvil) y el **contexto de negocio** como pieza transversal y auditable.
@@ -75,8 +75,15 @@ Lo único que ocurre antes de conocer el negocio: `auth.resolve_kiosk_token`, `a
 - PostgreSQL impone: exclusión de traslapes, `ends_at > starts_at`, FKs compuestas turno↔horario↔sucursal↔empleado, horario publicado irreversible, cancelado congelado y prohibición de borrar turnos publicados.
 - Copiar semana / aplicar plantilla comparten un generador con *savepoint* por turno, `dryRun` y resultado detallado.
 
-### 2.7 Procesos en segundo plano (Fase 3+)
-`core.list_active_organizations()` → cada negocio se procesa en **su propia transacción con su propio contexto**. Un error en uno no afecta a los demás; los suspendidos se omiten.
+### 2.6.3 Asistencia (Fase 3)
+- **Módulo `modules/attendance`** separado de la planificación: `KioskAttendanceService` (identificar PIN, acciones, checadas), `ReconcilerService`, `CorrectionsService`, `AttendanceQueryService` (tablero, jornadas, detalle, historial, incidencias) y `attendance-time.ts` (reglas puras: minutos con segundos truncados, día operativo, corte, estados de llegada, métricas).
+- **Matching turno ↔ jornada** (D-35): `shiftsInWindow` busca turnos OFICIALES del empleado en la sucursal del kiosco con `starts_at − early_entry_window_min ≤ ahora < ends_at` y sin jornada; gana el inicio más cercano. Sin coincidencia ⇒ jornada sin turno + marcas (D-6, D-36).
+- **Concurrencia** (D-55): cada checada bloquea la fila del empleado (`SELECT … FOR UPDATE`), así se serializan doble toque, dos kioscos y reintentos; PostgreSQL además impone una jornada `OPEN` por empleado, una pausa abierta por jornada, idempotencia `(device_id, client_event_id)` y la exclusión de jornadas cerradas que se cruzan.
+- **Invariantes en la BD**: solo turnos oficiales se ligan; no se cierra con pausa abierta; una cerrada no se reabre; eventos y correcciones solo-agregar; nadie corrige su propia jornada; un turno con jornada no se cancela; un turno publicado no se mueve a un horario no publicado (D-33).
+- **Kiosco** (D-56): `POST /api/kiosk/activate` valida el token (o el código de emparejamiento), **rota** la credencial y la entrega en la cookie `HttpOnly` `kiosk`/`__Host-kiosk` (`SameSite=Strict`). `identify` aplica D-21 y devuelve un **pase firmado** de 120 s (HMAC con clave derivada del secreto del servidor) con el que `punch` registra la acción sin reenviar el PIN.
+
+### 2.7 Procesos en segundo plano (Fase 3)
+`core.list_active_organizations()` → cada negocio se procesa en **su propia transacción con su propio contexto** (rol `app_user`, sin `BYPASSRLS`) y con un candado consultivo. Un error en uno no afecta a los demás; los suspendidos se omiten. Hoy: la reconciliación de asistencia (`node dist/src/cli/reconcile.js`, idempotente), programable en Coolify o dentro de la API con `RECONCILE_INTERVAL_SEC`.
 
 ### 2.8 Tiempo real (Fase 4)
 Canales por `organization_id:branch_id`; al abrir el stream se verifica el alcance del usuario.
@@ -98,16 +105,16 @@ Canales por `organization_id:branch_id`; al abrir el stream se verifica el alcan
 ```
 .
 ├─ apps/api/                         # NestJS + dominio
-│  ├─ db/migrations/                 # SQL oficial (0001…0005)
+│  ├─ db/migrations/                 # SQL oficial (0001…0008)
 │  ├─ src/
 │  │  ├─ common/tenancy/             # TenantContext, TenantDb, PlatformDb, Gate
 │  │  ├─ db/                         # pool, migrador, bootstrap de roles, esquema Drizzle
-│  │  ├─ modules/{audit,auth,core,organizations,policies}
-│  │  ├─ http/                       # controladores Nest (Fase 0: /health)
-│  │  ├─ cli/                        # bootstrap, migrate, check-tenancy, platform
+│  │  ├─ modules/{audit,auth,core,organizations,policies,scheduling,attendance}
+│  │  ├─ http/                       # controladores Nest (panel, kiosco, asistencia)
+│  │  ├─ cli/                        # bootstrap, migrate, check-tenancy, platform, reconcile
 │  │  ├─ container.ts                # raíz de composición (sin PlatformDb)
 │  │  └─ app.module.ts, main.ts
-│  └─ test/                          # 14 archivos, PostgreSQL real
+│  └─ test/                          # 24 archivos, PostgreSQL real
 ├─ apps/web/                         # panel Next.js (proxy /api, i18n, E2E Playwright)
 ├─ scripts/e2e.sh                    # E2E contra API + PostgreSQL reales
 ├─ docs/                             # reglas, modelo, arquitectura, operación
@@ -125,18 +132,19 @@ sequenceDiagram
   participant K as Kiosco
   participant API as API
   participant DB as PostgreSQL
-  K->>API: identify {pin} + token de dispositivo
+  K->>API: identify {pin} + cookie del dispositivo
   API->>DB: resolve_kiosk_token → (organization, branch, device) [función-puerta]
-  API->>DB: BEGIN; set org; ¿bloqueado por intentos?; empleado por HMAC(pepper, org‖pin); registra intento
-  API-->>K: sesión corta + acciones permitidas
-  K->>API: punch {type, client_event_id}
-  API->>DB: BEGIN; set org; bloquear jornada; validar transición; insertar punch_event; recalcular; incidencias; auditoría; COMMIT
+  API->>DB: BEGIN; set org; ¿pausa D-21?; empleado por HMAC(pepper, org‖pin); registra intento; COMMIT
+  API->>DB: BEGIN; set org; ¿jornada vencida? ⇒ REVIEW; acciones posibles; turno oficial; COMMIT
+  API-->>K: pase firmado (120 s) + nombre + turno + acciones
+  K->>API: punch {ticket, action, client_event_id}
+  API->>DB: BEGIN; set org; bloquear empleado; ¿mismo client_event_id? ⇒ misma respuesta; antirrebote; validar transición; matching turno; insertar jornada/pausa + evento; incidencias; auditoría; COMMIT
   API-->>K: confirmación (hora del servidor)
 ```
-**Ya implementado (Fases 0–1):** alta de dispositivo desde el panel, token (negocio+sucursal+dispositivo) generar/revocar/regenerar, activar/desactivar, emparejamiento por código, `POST /api/kiosk/identify` con pausa progresiva por dispositivo (D-21) y registro de intentos. El token **nunca** puede cruzar a otro negocio; la sucursal sale del token.
+**Implementado (Fases 0–3):** activación del navegador con rotación de la credencial (cookie `HttpOnly`), pase corto tras el PIN, las cuatro acciones con idempotencia y concurrencia segura. Antes (Fases 0–1): alta de dispositivo desde el panel, token (negocio+sucursal+dispositivo) generar/revocar/regenerar, activar/desactivar, emparejamiento por código, `POST /api/kiosk/identify` con pausa progresiva por dispositivo (D-21) y registro de intentos. El token **nunca** puede cruzar a otro negocio; la sucursal sale del token.
 
-### 6.2 Corrección (Fase 5)
-Motivo obligatorio ⇒ validar misma organización (RLS), sucursal donde ocurrió la jornada dentro del alcance, **no es la propia jornada** ⇒ transacción: checadas nuevas + anulaciones + recálculo + incidencia + auditoría.
+### 6.2 Corrección (Fase 3)
+Motivo obligatorio ⇒ misma organización (RLS), sucursal donde ocurrió la jornada dentro del alcance, **no es la propia jornada** (servicio + trigger), versión vista ⇒ transacción: valor efectivo nuevo + fila en `corrections` (original, corregido, antes/después) + recálculo de retardo/comida + incidencias resueltas como `CORRECTED` + auditoría. El evento físico nunca se toca.
 
 ## 7. Seguridad
 
@@ -152,7 +160,7 @@ Motivo obligatorio ⇒ validar misma organización (RLS), sucursal donde ocurri�
 
 ## 8. Kiosco (UX, Fase 3)
 
-PWA en pantalla completa; **logo y nombre del negocio** y de la sucursal, campo de código y teclado numérico grande; solo los botones permitidos; reloj del servidor; **"Sin conexión"** visible (MVP: contingencia = corrección manual con motivo); "lanzador del empleado" que podrá alojar mesas, adelantos, comunicados.
+`/kiosco` en pantalla completa (Fase 3): **logo y nombre del negocio** y de la sucursal, reloj del servidor, PIN enmascarado con teclado numérico grande, borrar y confirmar; después nombre, turno oficial y **solo los botones posibles**; confirmación grande y regreso automático (20 s de inactividad, 4 s tras checar); **"Sin conexión"** visible (MVP: contingencia = corrección con motivo, que puede crear la jornada). Futuro: "lanzador del empleado" (mesas, adelantos, comunicados).
 
 ## 9. Despliegue en Coolify
 
@@ -171,9 +179,9 @@ Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_
 | **0 · Fundaciones + multi-tenant** | PostgreSQL + migraciones, `organizations`, `branches`, identidades globales, membresías, roles y alcance por sucursal, empleados, kioscos, contexto seguro de negocio, RLS, roles sin bypass, auditoría, políticas con herencia, pruebas de aislamiento A↔B, verificación de catálogo en CI, CLI, Docker/CI | ✅ **Hecha** |
 | **1 · Identidad, sesión y administración base** | D-21; login/logout, sesión por cookie con rotación, selector y cambio de negocio, invitaciones de un solo uso, RBAC HTTP por sucursal, CRUD de sucursales/empleados/kioscos/políticas (override vs efectiva), auditoría; panel web funcional; E2E | ✅ **Hecha** (pendiente: criterios de despliegue §9) |
 | **2 · Horarios y turnos** | Horario semanal DRAFT/PUBLISHED, turno concreto con zona y DST, traslapes en PostgreSQL, alcance del encargado, histórico protegido, concurrencia optimista, copiar semana, plantillas; pantalla "Horario semanal", plantillas y próximos turnos del empleado | ✅ **Hecha** |
-| 3 · Motor de asistencia | Kiosco, máquina de estados, pausas, cálculo, incidencias, corte operativo, jobs por negocio | Pendiente |
-| 4 · Tablero en vivo | SSE por negocio/sucursal | Pendiente |
-| 5 · Correcciones | Flujo + visor de auditoría | Pendiente |
+| **3 · Asistencia** | D-33; kiosco táctil con activación segura; jornadas, eventos inmutables, pausas, matching con turnos oficiales, día operativo, incidencias, reconciliación, correcciones auditadas, tablero (consulta cada 30 s), jornadas, incidencias, historial | ✅ **Hecha** |
+| 4 · Tiempo real | SSE por negocio/sucursal (hoy el tablero consulta cada 30 s) | Pendiente |
+| 5 · Correcciones avanzadas | Solicitudes con aprobación (`attendance.correction.request`), agregar pausas omitidas, reprocesos | Pendiente |
 | 6 · Reportes | Consultas + Excel + accesos rápidos de periodo | Pendiente |
 | 7 · Autoservicio del empleado | Horarios/asistencias/incidencias en kiosco | Pendiente |
 | Después | Recuperación por correo, modo offline, PDF, QR/cámara, nómina, UI de plataforma, planes/facturación | — |

@@ -1,6 +1,6 @@
 # 01 · Reglas de negocio — Reloj checador (plataforma multi-negocio)
 
-> **Versión 1.2 — CONGELADA** (1.1 = D-21 protección del PIN; 1.2 = D-22…D-32 planificación de horarios y turnos). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
+> **Versión 1.3 — CONGELADA** (1.1 = D-21 protección del PIN; 1.2 = D-22…D-32 planificación de horarios y turnos; 1.3 = D-33…D-65 asistencia, jornadas, checadas, pausas y kiosco). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
 > Fatboy es el **primer negocio (tenant)**; ninguna regla ni dato está diseñado específicamente para Fatboy.
 > Los valores `default` son los del **nivel plataforma** y se pueden sobrescribir por negocio, sucursal o empleado según la jerarquía de configuración (§10).
 
@@ -16,10 +16,10 @@
 | **Membresía** | Relación de un usuario con un negocio (estado, roles, alcance, ficha de empleado opcional). |
 | **Kiosco** | Tablet registrada, ligada a un negocio, una sucursal y un dispositivo. |
 | **Turno programado** (`shift`) | Lo que *debería* trabajar un empleado: sucursal + inicio + fin. |
-| **Jornada** (`attendance_record`) | Lo que *realmente* ocurrió para un turno: Entrada → Salida, con sus cálculos. |
-| **Pausa / comida** (`attendance_break`) | Registro independiente de una salida a comer y su regreso, dentro de una jornada. |
-| **Checada** (`punch_event`) | Evento individual (Entrada, Salida, Salida a comer, Regreso de comer). **Inmutable.** |
-| **Corrección** | Registro que agrega, anula o ajusta una checada. Nunca edita la original. |
+| **Jornada real** (`work_session`) | Lo que *realmente* ocurrió: Entrada → Salida efectivas, con o sin turno (D-37). Shift = lo que debía trabajar; WorkSession = lo que ocurrió. |
+| **Pausa / comida** (`break`) | Registro independiente de una salida a comer y su regreso, dentro de una jornada. |
+| **Checada** (`event`) | Evento físico del kiosco (`CLOCK_IN`, `BREAK_START`, `BREAK_END`, `CLOCK_OUT`). **Inmutable.** |
+| **Corrección** | Acción de dominio que cambia el valor EFECTIVO de una jornada o pausa (o crea la jornada que sí ocurrió). Nunca edita el evento físico (D-52). |
 | **Incidencia** | Anomalía que requiere atención o justificación. |
 | **Fecha laboral** (`business_date`) | Fecha *local* en que **inicia** el turno. Un turno 7 PM → 3 AM del 15 pertenece al día 14. |
 | **Hora de corte operativo** | Hora local que separa un día operativo del siguiente (ej. 05:00). Parámetro heredable. |
@@ -72,9 +72,9 @@
 - **RN-OPE-01** La **hora de corte operativo** es un parámetro de política (default 05:00) heredable Plataforma → Negocio → Sucursal. Un día operativo va de un corte al siguiente, en la zona efectiva de la sucursal.
 - **RN-OPE-02** Para una checada **sin turno**, la fecha laboral es la del día operativo de la Entrada.
 - **RN-OPE-03** **El sistema NUNCA inventa una hora de salida.**
-- **RN-OPE-04** Una jornada abierta se marca como **olvido de salida** al llegar el **primer corte operativo posterior al fin programado de su turno**. Sin turno: el primer corte posterior a la Entrada que además ocurra al menos `max_hours_unscheduled` (14 h) después.
+- **RN-OPE-04** Una jornada abierta se marca como **salida olvidada** (`SALIDA_OLVIDADA`, D-47) al llegar el **primer corte operativo posterior al fin programado de su turno**. Sin turno: cuando lleva abierta `max_open_session_minutes` (960) ⇒ `JORNADA_ABIERTA_EXCEDIDA` (D-48). *(1.3: reemplaza el criterio de `max_hours_unscheduled`.)*
 - **RN-OPE-05** Detección en dos momentos: proceso automático cada minuto y **al identificarse el empleado** si su jornada abierta ya terminó su turno y se abrió la ventana de otro turno suyo (así nunca queda "atorado").
-- **RN-OPE-06** Al marcarla: estado `REVIEW`, `actual_out` vacío, horas trabajadas **no calculadas** ("incompleta"), incidencia `SALIDA_FALTANTE` y **requiere corrección**. No bloquea nuevas entradas.
+- **RN-OPE-06** Al marcarla: estado `REVIEW`, salida vacía, duración **no calculada** ("incompleta"), incidencia `SALIDA_OLVIDADA`/`JORNADA_ABIERTA_EXCEDIDA` (y `REGRESO_COMIDA_FALTANTE` si tenía la pausa abierta) y **requiere corrección**. Ya no acepta checadas del kiosco y no bloquea nuevas entradas (la unicidad de D-40 aplica a jornadas `OPEN`).
 - **RN-OPE-07** La corrección agrega la salida real que confirme el encargado, con motivo; la jornada se recalcula.
 
 ## 6. Identificación en el kiosco (PIN)
@@ -122,7 +122,7 @@ Modelo: **Plantilla → Horario semanal → Turno concreto → (Fase 3) Jornada 
 - **RN-HOR-04** **Horario semanal** por sucursal y semana (`week_start_day`): `DRAFT` → `PUBLISHED`. Publicar es una acción **explícita e irreversible** (D-24). En `DRAFT` se edita libremente según permisos y un turno se puede quitar; un turno de un horario publicado **nunca se borra**: se cancela.
 - **RN-HOR-05** **Plantillas** separadas de los turnos (D-23): ayudan a generar semanas; modificarlas **nunca** cambia turnos existentes, históricos ni publicados. **Copiar semana anterior** conserva las **horas locales** (no suma 7×24 h en UTC), valida empleados activos, sucursal activa, asignaciones, traslapes y permisos, y reporta cada turno que no pudo copiarse con su motivo.
 - **RN-HOR-06** Día sin turno = descanso, no genera falta.
-- **RN-HOR-07** Un turno publicado se puede editar, reasignar, cambiar de sucursal u horario y cancelar; **todo cambio se audita** con antes/después (D-31). **Motivo obligatorio para cancelar**; la edición normal no lo exige. *(Precisa la versión anterior de esta regla, que pedía motivo para todo cambio.)*
+- **RN-HOR-07** Un turno publicado se puede editar, reasignar, cambiar de sucursal u horario y cancelar; **todo cambio se audita** con antes/después (D-31). **Motivo obligatorio para cancelar**; la edición normal no lo exige. *(Precisa la versión anterior de esta regla, que pedía motivo para todo cambio.)* **D-33:** un turno de un horario publicado solo se mueve a una sucursal/semana cuyo horario ya esté publicado; nunca termina en un borrador.
 - **RN-HOR-08** Programan el administrador (todo el negocio) y el ENCARGADO **solo en las sucursales de su alcance**, **solo con empleados asignados a esa sucursal en esa fecha** (D-30). `schedules.manage` viene por defecto en ENCARGADO y es revocable por negocio. La excepción operativa del kiosco (D-17, `SIN_ASIGNACION_SUCURSAL`) **no aplica** a la planificación.
 - **RN-HOR-09** **Turnos nocturnos** (D-27): un solo turno (19:00 → 03:00 del día siguiente), `ends_at > starts_at` siempre; pertenecen al día en que **inician**.
 - **RN-HOR-10** **DST** (D-28): solo zonas IANA. Una hora local **inexistente** se rechaza con error explícito; una hora **ambigua** exige indicar cuál (`EARLIER`/`LATER`). Nunca se guarda otra hora en silencio.
@@ -130,6 +130,22 @@ Modelo: **Plantilla → Horario semanal → Turno concreto → (Fase 3) Jornada 
 - **RN-HOR-12** **Turnos históricos** (D-32): un turno **futuro** se edita normalmente. Uno **en curso** o **terminado** (y crear un turno en el pasado) exige el permiso `schedules.history.manage` (solo ADMIN por defecto) **y motivo**; queda auditado como corrección histórica. Corrección de planificación ≠ corrección de asistencia.
 - **RN-HOR-13** **Estados del turno** (D-25): solo `SCHEDULED` / `CANCELLED`. Retardo, falta, trabajando, etc. pertenecen a la asistencia.
 - **RN-HOR-14** **Concurrencia:** cada cambio envía la versión que el usuario vio; si otra persona modificó antes el turno, el horario o la plantilla, se rechaza y hay que recargar (nada se sobrescribe en silencio).
+
+## 8 bis. Asistencia: jornadas, checadas, pausas y kiosco (D-33 … D-65)
+
+- **RN-ASI-01** **Turno oficial** = `SCHEDULED` de un horario `PUBLISHED` (D-34). Un turno en borrador o cancelado no existe para la asistencia: no se muestra al empleado, no se liga y no genera retardo, ausencia ni falta (D-62, D-63). Un turno publicado nunca vuelve implícitamente a borrador (D-33).
+- **RN-ASI-02** **Matching de la Entrada** (D-35): turno oficial del mismo empleado y de la **sucursal del kiosco** cuya ventana `[inicio − early_entry_window_min, fin)` contiene la hora del servidor; si hay varios, el de inicio más cercano. Fuera de ventana ⇒ jornada sin turno (`SIN_TURNO_PROGRAMADO`; `ENTRADA_FALTANTE` si su turno de ese día ya terminó).
+- **RN-ASI-03** **Otra sucursal** (D-36): la jornada pertenece a donde ocurrió; nunca se liga a un turno de otra sucursal; marcas `SIN_ASIGNACION_SUCURSAL` y `TURNO_EN_OTRA_SUCURSAL`. No se bloquea.
+- **RN-ASI-04** **Jornada real** (D-37): `OPEN` → `CLOSED`, o `OPEN` → `REVIEW` (requiere corrección) → `CLOSED`. Guarda los instantes efectivos; las diferencias y duraciones se calculan. Nunca modifica el turno.
+- **RN-ASI-05** **Eventos físicos** inmutables e idempotentes por `device_id + client_event_id` (D-38, D-54): un reintento devuelve el mismo resultado.
+- **RN-ASI-06** **Acciones del kiosco** (D-39): sin jornada ⇒ Entrada; abierta ⇒ Salida a comer (si no se alcanzó `max_breaks`) y Salida; en pausa ⇒ solo Regreso de comer. Salida con pausa abierta se rechaza: primero el regreso (D-50).
+- **RN-ASI-07** **Una jornada abierta por empleado** en el negocio (D-40), garantizado por PostgreSQL; en otra sucursal el kiosco reconoce la abierta. Dos Entradas simultáneas crean una sola jornada (D-55).
+- **RN-ASI-08** **Retardo real** (D-41, D-42): diferencia completa con signo contra `starts_at` (06:40 ⇒ −20; 07:08 ⇒ +8 sin incidencia con tolerancia 10; 07:12 ⇒ +12 y `RETARDO`). Se guarda la hora real, sin redondear.
+- **RN-ASI-09** **Estados derivados** (D-43): 07:00–07:10 en tolerancia · 07:11–07:59 retardo/aún no llega · desde 08:00 ausente/no ha llegado (no definitivo) · con Entrada: trabajando con su retardo real · falta solo si el turno termina sin Entrada.
+- **RN-ASI-10** **Reconciliación** (D-44, D-47, D-48, D-50): proceso periódico e idempotente que materializa `FALTA` (una por turno), `SALIDA_OLVIDADA`, `JORNADA_ABIERTA_EXCEDIDA` y `REGRESO_COMIDA_FALTANTE`. Nunca inventa horas.
+- **RN-ASI-11** **Día operativo** (D-46): con turno = fecha local de inicio del turno; sin turno = hora local de la sucursal y la hora de corte (Fatboy 05:00, D-45).
+- **RN-ASI-12** **Kiosco** (D-56 … D-59): credencial propia del dispositivo (cookie `HttpOnly`, activación con token de un solo uso o código de emparejamiento); PIN enmascarado que nunca aparece en logs, errores, auditoría ni URLs; al empleado solo su nombre, sucursal, turno oficial actual/próximo, acciones y confirmación; regreso automático a la pantalla de PIN.
+- **RN-ASI-13** **Duración y salida** (D-64, D-65): duración real = salida efectiva − entrada efectiva; pausas aparte, sin descuento automático; diferencia de salida con signo, sin sanciones.
 
 ## 9. Cálculo de asistencia
 
@@ -175,7 +191,7 @@ Variables: `Hp_ini`/`Hp_fin` programados; `Hr_ini`/`Hr_fin` = primera Entrada / 
 | `early_entry_window_min` | 60 | negocio · sucursal |
 | `absent_after_min` (estado "Ausente") | 60 | negocio · sucursal |
 | `operational_cutoff` (hora) | 05:00 | negocio · sucursal |
-| `max_hours_unscheduled` | 14 | negocio · sucursal |
+| `max_open_session_minutes` (D-48) | 960 | negocio · sucursal |
 | `debounce_sec` | 60 | negocio · sucursal |
 | `pin_max_attempts` | 5 | negocio · sucursal |
 | `pin_lockout_sec` (pausa inicial) | 10 | negocio · sucursal |
@@ -191,9 +207,9 @@ La zona horaria **no es una política**: es un atributo del negocio (obligatorio
 
 ## 11. Incidencias y estados de llegada
 
-- **RN-INC-01** Tipos: `SALIDA_FALTANTE`, `ENTRADA_FALTANTE`, `REGRESO_COMIDA_FALTANTE`, `SALIDA_COMIDA_FALTANTE`, `COMIDA_EXCEDIDA`, `RETARDO`, `FALTA`, `SALIDA_ANTICIPADA`, `SIN_TURNO_PROGRAMADO`, `SIN_ASIGNACION_SUCURSAL`, `SIN_COMIDA`.
+- **RN-INC-01** Tipos implementados (1.3): `RETARDO`, `FALTA`, `SIN_TURNO_PROGRAMADO`, `SIN_ASIGNACION_SUCURSAL`, `TURNO_EN_OTRA_SUCURSAL` (informativa, D-36), `ENTRADA_FALTANTE` (Entrada después del fin de su turno), `SALIDA_OLVIDADA` (D-47), `JORNADA_ABIERTA_EXCEDIDA` (D-48), `REGRESO_COMIDA_FALTANTE`, `COMIDA_EXCEDIDA`. Pendientes para reportes/fases siguientes: `SALIDA_ANTICIPADA` y `SIN_COMIDA` (la diferencia de salida ya se calcula, D-65, sin sanción automática).
 - **RN-INC-02** Las genera el **sistema**; el empleado nunca las crea ni edita.
-- **RN-INC-03** `ABIERTA` → `RESUELTA` con resolución `CORREGIDA`, `JUSTIFICADA`, `CONFIRMADA` o `DESCARTADA`, siempre con motivo, usuario y fecha.
+- **RN-INC-03** `ABIERTA` → `RESUELTA` con resolución `CORREGIDA` (por una corrección), `JUSTIFICADA`, `CONFIRMADA` o `DESCARTADA`, siempre con motivo, usuario y fecha. Una incidencia resuelta no se modifica ni se borra; nadie resuelve las propias.
 - **RN-INC-04** Los reportes distinguen confirmados de justificados.
 - **RN-INC-05** El empleado puede consultar (solo lectura) sus incidencias en el kiosco.
 - **RN-INC-06** **Estados de llegada (separados):**
@@ -209,7 +225,7 @@ La zona horaria **no es una política**: es un atributo del negocio (obligatorio
 ## 12. Correcciones
 
 - **RN-COR-01** El empleado no puede corregir nada.
-- **RN-COR-02** Una corrección puede agregar, anular o cambiar la hora de una checada (anular + agregar). **Motivo obligatorio siempre.**
+- **RN-COR-02** Una corrección es una **acción de dominio**: hora de Entrada, de Salida, inicio o fin de una pausa, ligar/desligar el turno oficial o crear la jornada que sí ocurrió (D-53). Cambia el valor **efectivo**; el evento físico no se toca (D-52). **Motivo obligatorio siempre.**
 - **RN-COR-03** **Siempre se conserva la original** (nunca se borra ni reemplaza en silencio) y hay **auditoría antes/después**.
 - **RN-COR-04** **Encargado:** corrige jornadas **ocurridas en sus sucursales**, sin importar la sucursal habitual del empleado.
 - **RN-COR-05** **Nadie puede corregir su propia jornada.** La de un encargado la corrige otro encargado con permiso sobre esa sucursal o un administrador.

@@ -1,6 +1,6 @@
 # 00 · Registro de decisiones
 
-Todas las decisiones funcionales actuales están **cerradas** (reglas v1.0 y modelo v1.0 congelados). Un cambio posterior se anota aquí con fecha y motivo.
+Todas las decisiones funcionales actuales están **cerradas** (reglas v1.3 y modelo v1.3 congelados; D-1 … D-65). Un cambio posterior se anota aquí con fecha y motivo.
 
 | # | Decisión | Reglas |
 |---|---|---|
@@ -39,6 +39,66 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.0 y mod
 | **D-31** | Cambios a turnos publicados auditados (antes/después, usuario, fecha, negocio, sucursal); motivo obligatorio solo al cancelar. | RN-HOR-07 |
 | **D-32** | Futuro: edición normal. En curso o terminado (y crear en el pasado): solo con `schedules.history.manage` (ADMIN) y motivo. Planificación ≠ asistencia. | RN-HOR-12 |
 
+| **D-33** | Un turno de un horario `PUBLISHED` nunca vuelve implícitamente a borrador: moverlo a otra sucursal o semana exige que el horario destino exista y esté `PUBLISHED` (si no, `SHIFT_TARGET_SCHEDULE_NOT_PUBLISHED`). En borradores sí se crea el destino en `DRAFT`. Sin estado de publicación en el turno: la semántica vive en el horario. Servicio + trigger. | RN-HOR-07 |
+| **D-34** | Solo turnos `SCHEDULED` de un horario `PUBLISHED` cuentan para asistencia. Un borrador no existe operativamente (si el empleado checa ⇒ `SIN_TURNO_PROGRAMADO`; no se le muestra). La jornada guarda `shift_id` (nullable por D-6). | RN-ASI-01 |
+| **D-35** | Matching de la Entrada: mismo negocio, empleado y sucursal del kiosco, turno oficial; ventana `inicio − early_entry_window_min` (60) … fin del turno. Después del fin ya no se liga. Sin turno válido ⇒ jornada sin turno (D-6). Nunca turnos de otra sucursal. | RN-ASI-02 |
+| **D-36** | Programado en otra sucursal y checa aquí: jornada en la sucursal real, `shift_id = null`, `SIN_ASIGNACION_SUCURSAL` si no está asignado y marca informativa `TURNO_EN_OTRA_SUCURSAL`. No se bloquea (D-17). | RN-ASI-03 |
+| **D-37** | Jornada real (`work_session`): negocio, sucursal, empleado, turno (nullable), inicio, fin (nullable), día operativo, estado, origen, incidencias, versión, auditoría. Sin valores derivados guardados. Nunca modifica el turno. *Shift = lo que debía trabajar; WorkSession = lo que ocurrió.* | RN-ASI-04 |
+| **D-38** | Eventos físicos `CLOCK_IN`/`BREAK_START`/`BREAK_END`/`CLOCK_OUT` inmutables con la infraestructura D-12 (`client_event_id`, `device_id`, `occurred_at`, `received_at`, `source`, idempotencia) y relación con negocio, sucursal, empleado y jornada. Una corrección no altera el evento. | RN-ASI-05 |
+| **D-39** | Acciones del kiosco según la jornada: sin jornada ⇒ Entrada; abierta ⇒ Salida a comer + Salida; en pausa ⇒ Regreso de comer. Nunca acciones imposibles; las inconsistencias van a corrección administrativa. | RN-ASI-06 |
+| **D-40** | Una sola jornada abierta por empleado en el negocio, también en PostgreSQL; en otra sucursal el kiosco reconoce la existente. | RN-ASI-07 |
+| **D-41** | La Entrada ligada guarda/calcula la diferencia real completa contra `starts_at` (con signo); la tolerancia solo decide `RETARDO`. | RN-ASI-08 |
+| **D-42** | Llegada anticipada dentro de la ventana: se liga y se guarda la hora real (sin redondear). | RN-ASI-08 |
+| **D-43** | Estados derivados: dentro de tolerancia · Retardo/aún no llega · Ausente/no ha llegado (desde `absent_after_min`) · Trabajando (conserva el retardo) · Falta solo si el turno termina sin Entrada válida. | RN-ASI-09 |
+| **D-44** | Al terminar un turno publicado sin Entrada ⇒ incidencia `FALTA` (negocio, sucursal, empleado, turno, fecha) por un servicio de reconciliación ejecutable e idempotente; resoluble sin borrar. | RN-ASI-10 |
+| **D-45** | Corte operativo de Fatboy = 05:00 (valor de plataforma heredado; las sucursales lo heredan salvo override). | RN-OPE-01 |
+| **D-46** | Día operativo: con turno = fecha local de inicio del turno; sin turno = hora local de la sucursal y el corte (03:30 ⇒ día anterior; 05:15 ⇒ día actual). Zona IANA efectiva. | RN-ASI-11 |
+| **D-47** | Jornada con turno abierta al primer corte posterior al fin ⇒ `SALIDA_OLVIDADA` + requiere corrección. Nunca se inventa la salida. | RN-OPE-04 |
+| **D-48** | Jornada sin turno abierta más de `max_open_session_minutes` (960) ⇒ sigue abierta, requiere corrección e incidencia; sin salida inventada. | RN-OPE-04 |
+| **D-49** | Pausas como registros independientes (D-14); Fatboy 1 pausa de 35 min; guardar inicio, fin, duración y exceso individual; acumulados calculados. Sin efecto en horas, sueldo ni nómina. | RN-CAL-02 |
+| **D-50** | Pausa abierta: no se inventa el regreso; para marcar Salida primero "Regreso de comer"; la corrección resuelve los casos reales. | RN-EVT-08 |
+| **D-51** | Corrección de asistencia = módulo separado; nunca modifica turnos. ENCARGADO: jornadas ocurridas en sus sucursales, no la propia; ADMIN: todo el negocio. Motivo obligatorio; original, corregido, usuario, fecha, antes/después. | RN-COR-* |
+| **D-52** | Sin `UPDATE` destructivo sobre el evento físico: estructura de correcciones; reportes con el valor efectivo; auditoría con ambos. | RN-COR-03 |
+| **D-53** | Corregir una falta: crear/corregir la jornada y marcar la incidencia como resuelta por corrección, conservando el historial. | RN-COR-08 |
+| **D-54** | Toda acción del kiosco es idempotente por `device_id + client_event_id`; un reintento responde lo mismo. | RN-EVT-12 |
+| **D-55** | Concurrencia: dos Entradas simultáneas no crean dos jornadas; igual para pausas y Salida. Invariantes en PostgreSQL. | RN-EVT-01 |
+| **D-56** | Kiosco con credencial de dispositivo propia (no la sesión administrativa); activación pegando el token una vez; el servidor establece una cookie segura; revocado/desactivado deja de funcionar. Nada permanente en `localStorage`. | RN-PIN-09 |
+| **D-57** | Pantalla táctil a pantalla completa: negocio, sucursal, reloj, PIN con teclado grande, borrar, confirmar; luego nombre, acciones, turno y hora; confirmación grande y regreso automático sin datos del anterior. | RN-ASI-12 |
+| **D-58** | PIN enmascarado; nunca en logs, errores, auditoría, analítica, URLs o query strings; se mantiene D-21. | RN-PIN-* |
+| **D-59** | Al empleado solo: su nombre, sucursal, turno actual/próximo, acción y confirmación. | RN-ASI-12 |
+| **D-60** | Tablero de asistencia por sucursal con estados derivados (programados, no llegan, retardos, ausentes, trabajando, en comida, con problema, salidas, faltas). | RN-RT-* |
+| **D-61** | Historial por empleado: día operativo, sucursal, turno, Entrada/Salida reales, diferencia, pausas, exceso, incidencias, correcciones y quién corrigió. Programado ≠ Real. | RN-REP-04 |
+| **D-62** | Un turno `CANCELLED` no genera retardo, ausencia ni falta ni se liga; si llega igual ⇒ jornada sin turno. | RN-ASI-01 |
+| **D-63** | Un turno en semana `DRAFT` no aparece al empleado ni genera ausencia/falta/retardo ni se liga. | RN-ASI-01 |
+| **D-64** | Duración real = salida efectiva − entrada efectiva; las pausas se reportan aparte; nada se descuenta automáticamente. | RN-CAL-* |
+| **D-65** | Diferencia salida efectiva − `ends_at` (con signo) para reportes; sin sanciones automáticas. | RN-CAL-* |
+
+## Decisiones técnicas de la Fase 3 (para revisión)
+
+- **Activación del kiosco (D-56) — opción más segura que "guardar el token":** al activar, el servidor **rota** la credencial del dispositivo. El token que se pegó deja de servir de inmediato (es de **un solo uso**: una captura de pantalla del token no permite activar una segunda tablet) y la credencial nueva viaja solo en una cookie `HttpOnly`, `SameSite=Strict`, `Secure` en producción (`__Host-kiosk`), con renovación deslizante (365 días sin uso ⇒ hay que reactivar). La activación también acepta un **código de emparejamiento** (8 caracteres, más cómodo de teclear). Las peticiones del kiosco con cookie exigen la cabecera anti-CSRF; `Authorization: Bearer` sigue aceptándose para integraciones.
+- **Pase corto tras el PIN (RN-PIN-10):** identificar el PIN devuelve un pase firmado (HMAC-SHA256 con una clave derivada del secreto del servidor) ligado a negocio + dispositivo + empleado, válido 120 s; la acción no vuelve a enviar el PIN. La pantalla regresa sola al PIN a los 20 s de inactividad.
+- **Jornada marcada para corrección = estado `REVIEW`** (`OPEN` → `REVIEW` → `CLOSED`): sigue sin hora de salida, ya no acepta checadas del kiosco y **no impide una nueva Entrada** (RN-OPE-06). La unicidad de D-40 aplica a `OPEN`. También se detecta al identificarse el empleado (RN-OPE-05), así el kiosco nunca queda "atorado" aunque la reconciliación no haya corrido.
+- **Desempate del matching:** si dos turnos oficiales de la sucursal están en ventana, gana el de inicio más cercano a la hora de la Entrada.
+- **`ENTRADA_FALTANTE` (RN-EVT-11) se conserva como marca informativa** cuando la Entrada llega después del fin de un turno de esa sucursal y ese día (la jornada queda sin turno, como pide D-35).
+- **Un turno con jornada real ya no se cancela ni cambia de empleado/sucursal** (trigger + FK compuesta). Corregir sus horas sigue siendo posible (D-32).
+- **Una checada en otra sucursal sobre una jornada abierta** (D-40) se registra como evento en la sucursal física del kiosco; la jornada conserva la sucursal donde inició.
+- **Antirrebote (RN-EVT-02, 60 s por defecto) se mantiene:** dos checadas del mismo empleado con menos de `debounce_sec` se rechazan con el tiempo de espera. Para pruebas manuales rápidas puede bajarse a 0 en Políticas.
+- **Correcciones:** acciones cerradas `SET_CLOCK_IN`, `SET_CLOCK_OUT`, `SET_BREAK_START`, `SET_BREAK_END`, `LINK_SHIFT`, `UNLINK_SHIFT` y `CREATE_SESSION` (D-53), con validación de orden, sin horas futuras, sin cruzar otra jornada y con concurrencia optimista (`version` de la jornada; cada checada la incrementa). Cerrar por corrección una jornada con la pausa abierta exige corregir antes el regreso. `CREATE_SESSION` no fabrica eventos físicos. Recalculan el retardo y la comida excedida y resuelven (sin borrar) las incidencias que ya no aplican.
+- **Incidencias:** `OPEN` → `RESOLVED` (`CORRECTED`, `JUSTIFIED`, `CONFIRMED`, `DISMISSED`) con motivo; una resuelta no se modifica (trigger). Una abierta por tipo y jornada; una sola `FALTA` por turno aunque se resuelva. Resolver la propia incidencia también está prohibido.
+- **Reconciliación:** comando `node dist/src/cli/reconcile.js` (servicio `reconcile` del compose) con el rol `app_user` y cada negocio en su contexto; candado consultivo por negocio; opcionalmente dentro de la API con `RECONCILE_INTERVAL_SEC` (apagado por defecto).
+- **Privilegios:** `app_user` sin `DELETE` en asistencia y con `UPDATE` solo en las columnas que cambian por reglas de dominio; eventos y correcciones solo-agregar; `platform_ops` solo lectura.
+- **Tablero:** se actualiza consultando cada 30 s (el tiempo real por SSE sigue siendo la Fase 4).
+
+### Ajustes a reglas anteriores (mínimos, por decisiones nuevas)
+
+| Regla anterior | Decisión nueva | Ajuste aplicado |
+|---|---|---|
+| RN-OPE-04: jornada sin turno ⇒ primer corte que ocurra al menos `max_hours_unscheduled` (14 h) después de la Entrada | D-48: `max_open_session_minutes = 960` | El parámetro `max_hours_unscheduled` (sin uso hasta ahora) se **renombró** a `max_open_session_minutes` (960, rango 60–2880); los overrides existentes se convirtieron a minutos. |
+| RN-OPE-06 / RN-INC-01: incidencia `SALIDA_FALTANTE` | D-47: `SALIDA_OLVIDADA` | Se usa `SALIDA_OLVIDADA`. Se agregan `TURNO_EN_OTRA_SUCURSAL` (D-36) y `JORNADA_ABIERTA_EXCEDIDA` (D-48). |
+| RN-OPE-06 "no bloquea nuevas entradas" vs. D-40 "una jornada abierta" | — | Ver estado `REVIEW` arriba: no hay contradicción si "abierta" = jornada activa en el kiosco. |
+| Modelo 1.2 §8: `attendance_records` con columnas calculadas guardadas, `punch_event_voids` | D-37 (sin derivados) y D-52 (overrides) | Tablas `work_sessions` (valores efectivos), `events` (físicos), `breaks`, `incidents`, `corrections`; las diferencias y duraciones se calculan (duración/exceso por pausa = columnas generadas). |
+| RN-EVT-05: ventana hasta el fin del turno | D-35 | Igual; solo se agrega que el turno debe ser oficial y de la sucursal del kiosco. |
+
 ## Decisiones técnicas de la Fase 2 (para revisión)
 
 - **Copiar semana / aplicar plantilla = copia PARCIAL segura**, no todo-o-nada: cada turno se valida y se inserta en su propio *savepoint*; lo que no puede crearse vuelve en `conflicts` con su código (traslape, empleado inactivo, sin asignación, hora inexistente por DST, ya copiado…). `dryRun` ejecuta exactamente lo mismo en una transacción que se revierte (vista previa). Es **idempotente** (un mismo turno de origen no se copia dos veces al mismo horario, garantizado por índice único) y solo escribe en semanas en `DRAFT`. Si la sucursal está desactivada o la semana destino publicada, la operación completa se rechaza con error claro.
@@ -62,6 +122,7 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.0 y mod
 ## Despliegue
 
 - La validación real de Docker/Coolify (imágenes, red, HTTPS, cookies `Secure`, persistencia, reinicios) la hace el dueño en su servidor; no bloquea fases. El repositorio mantiene listos `Dockerfile`s, `docker-compose.yml`, variables y documentación (`04-operacion.md`).
+- [x] Fase 3: GitHub Actions en verde con migración `0008`, pruebas de asistencia, E2E del kiosco y smoke del comando de reconciliación.
 - [x] Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (typecheck, build, migraciones desde cero, `check:tenancy`, pruebas, E2E, smoke): **run #5, commit `cc1d7cb`**. Las ejecuciones #1–#4 fallaron y se corrigieron (contraseñas de roles compartidas por el clúster; carrera de navegación en el E2E).
 
 ## Ajustes por el congelamiento (respecto al borrador anterior)

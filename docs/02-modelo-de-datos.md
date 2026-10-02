@@ -1,7 +1,7 @@
 # 02 · Modelo de datos (PostgreSQL) — multi-negocio
 
-> **Versión 1.2 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
-> Estado de implementación: **Fases 0, 1 y 2 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`; migraciones `0001`–`0007` en `apps/api/db/migrations`). Las tablas de `scheduling` y `attendance` están **diseñadas** aquí y se crean en las fases 2–3.
+> **Versión 1.3 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
+> Estado de implementación: **Fases 0 a 3 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`, `attendance`; migraciones `0001`–`0008` en `apps/api/db/migrations`).
 
 ## 1. Convenciones
 
@@ -144,7 +144,7 @@ CHECK (valid_to IS NULL OR valid_to >= valid_from)
 Un usuario con varias sucursales = **una cuenta, una membresía, una asignación con varias filas de alcance**.
 
 ### `core.kiosk_devices` y `core.kiosk_pairing_codes`
-- `kiosk_devices`: `id` (= `device_id`), `organization_id`, `branch_id`, `name`, `status` (`ACTIVE`/`INACTIVE`, del dispositivo) y su token por separado: `token_prefix` (único global), `token_hash` (SHA-256 del secreto; nunca el token), `token_issued_at`, `token_revoked_at` (prefijo y hash ambos nulos = sin token), `last_seen_at`. **El token pertenece a `organization_id + branch_id + device_id`**; regenerar lo reemplaza y el anterior deja de funcionar.
+- `kiosk_devices`: `id` (= `device_id`), `organization_id`, `branch_id`, `name`, `status` (`ACTIVE`/`INACTIVE`, del dispositivo) y su token por separado: `token_prefix` (único global), `token_hash` (SHA-256 del secreto; nunca el token), `token_issued_at`, `token_revoked_at` (prefijo y hash ambos nulos = sin token), `last_seen_at`. **El token pertenece a `organization_id + branch_id + device_id`**; regenerar lo reemplaza y el anterior deja de funcionar. **Activar** un navegador como kiosco (D-56) también lo rota: el token pegado es de un solo uso y la credencial nueva solo vive en una cookie `HttpOnly`.
 - `kiosk_pairing_codes`: `id`, `organization_id`, `branch_id`, `code_hash`, `expires_at`, `used_at`, `created_by`. Un solo uso, vencimiento corto.
 
 ### `core.invitations` (Fase 1)
@@ -161,7 +161,7 @@ CHECK ((scope='ORGANIZATION' AND branch_id IS NULL AND employee_id IS NULL)
     OR (scope='EMPLOYEE'     AND employee_id IS NOT NULL AND branch_id IS NULL))
 -- niveles permitidos por parámetro, p. ej. no se puede sobrescribir por empleado:
 CHECK (scope <> 'EMPLOYEE' OR (early_entry_window_min IS NULL AND absent_after_min IS NULL
-       AND operational_cutoff IS NULL AND max_hours_unscheduled IS NULL AND debounce_sec IS NULL
+       AND operational_cutoff IS NULL AND max_open_session_minutes IS NULL AND debounce_sec IS NULL
        AND pin_max_attempts IS NULL AND pin_lockout_sec IS NULL AND week_start_day IS NULL))
 CHECK (scope = 'ORGANIZATION' OR week_start_day IS NULL)
 -- un override por nivel:
@@ -173,7 +173,7 @@ Más rangos por parámetro (`CHECK (break_allowed_min BETWEEN 0 AND 600)`, `week
 
 **Política efectiva** (`resolveEffectivePolicy`, función pura con pruebas): `plataforma → ORGANIZATION → BRANCH → EMPLOYEE`, campo por campo (`COALESCE` en orden inverso). Ejemplo: plataforma 35 · Fatboy (sin override) 35 · San Marcos 35 · Venecia 40 · empleado X (override 30) ⇒ efectivo de X = 30.
 
-Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_hours_unscheduled`, `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec`, `week_start_day`, `shift_min_minutes`, `shift_max_minutes` (tabla de defaults y niveles en `01 §10`).
+Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_open_session_minutes` (antes `max_hours_unscheduled`, renombrado por D-48), `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec`, `week_start_day`, `shift_min_minutes`, `shift_max_minutes` (tabla de defaults y niveles en `01 §10`).
 
 ## 6. Esquema `audit`
 
@@ -215,42 +215,52 @@ Plantilla por sucursal (`name` único por sucursal, `is_active`, `version`) y en
 ### Permisos nuevos
 `schedules.view`, `schedules.history.manage` (corregir turnos en curso/terminados, con motivo), `schedules.templates.manage`. ADMIN: todos. ENCARGADO por defecto: `schedules.view` y `schedules.manage` (siempre dentro de su alcance; revocable).
 
-## 8. Esquema `attendance` (Fase 3 — diseño)
+## 8. Esquema `attendance` (Fase 3 — implementado, migración `0008`)
 
-Todas con `organization_id`, FKs compuestas y RLS.
+Todas con `organization_id NOT NULL`, `UNIQUE (organization_id, id)`, FKs compuestas y RLS forzado. `app_user` **sin `DELETE`** y con `UPDATE` solo en columnas que cambian por reglas de dominio; `platform_ops` solo lectura.
+*Ajuste 1.3 (D-37, D-52): el diseño 1.2 (`attendance_records` con valores calculados guardados, `punch_events` + `punch_event_voids`) se sustituyó por valores EFECTIVOS en la jornada, eventos físicos aparte y correcciones solo-agregar. Las diferencias y duraciones se calculan.*
 
-### `attendance_records` — la jornada
-`id`, `employee_id`, `branch_id` (donde se trabajó), `shift_id` (nullable), `business_date`, `state` (`WORKING`/`ON_BREAK`/`CLOSED`/`REVIEW`/`ABSENT`), `scheduled_start/end` (snapshot), `review_due_at`, `actual_in`, `actual_out` (**vacío si nadie registró salida; nunca se inventa**), `entry_delta_minutes` (con signo, siempre), `entry_status` (`ON_TIME`/`LATE`/`NONE`), `late_minutes` (= delta real completo si `LATE`), `exit_status`, `early_leave_minutes`, `scheduled_minutes`, `worked_minutes` (`NULL` si incompleta; **sin** descontar pausas), **`breaks_total_minutes`**, **`breaks_exceeded_minutes`** (acumulados de la jornada), `policy_snapshot` jsonb, `computed_at`, `version`.
-```sql
-UNIQUE (employee_id) WHERE state IN ('WORKING','ON_BREAK')   -- una jornada abierta por empleado
-UNIQUE (shift_id) WHERE shift_id IS NOT NULL
-```
-
-### `attendance_breaks` — pausas/comidas como registros independientes (D-14)
-`id`, `organization_id`, `attendance_record_id`, `sequence` (1, 2, …), `started_event_id`, `ended_event_id` (nullable mientras está abierta), `started_at`, `ended_at`, `status` (`OPEN`/`CLOSED`), **`duration_minutes`**, **`allowed_minutes`** (snapshot de la política), **`exceeded_minutes`**.
-`UNIQUE (attendance_record_id, sequence)`; una sola pausa abierta por jornada. Es una **proyección** recalculable. El máximo (`max_breaks`) sale de la política, no del modelo: pasar de 1 a 2 pausas no requiere migración.
-
-### `punch_events` — checadas (INMUTABLES, preparadas para offline — D-12)
+### `work_sessions` — jornada real (D-37)
 | Columna | Notas |
 |---|---|
-| `id`, `organization_id`, `attendance_record_id`, `employee_id`, `branch_id` | |
-| `type` | `IN`/`OUT`/`BREAK_START`/`BREAK_END` |
-| **`client_event_id`** | `uuid` generado por el cliente (idempotencia) |
-| **`device_id`** | kiosco; nulo si `source = CORRECTION` |
-| **`occurred_at`** | cuándo ocurrió el evento. Online = hora del servidor |
-| **`received_at`** | cuándo lo recibió el servidor (`now()`) |
-| **`source`** | `KIOSK_ONLINE` / `KIOSK_OFFLINE_SYNC` / `CORRECTION` |
-| `time_source` | `SERVER` / `DEVICE` (offline: hora del dispositivo, marcada para revisión) |
-| `correction_id` | si vino de una corrección |
+| `branch_id` | donde **realmente** ocurrió (D-36) |
+| `employee_id`, `shift_id` (nullable, D-6) | FK `(organization_id, shift_id, employee_id, branch_id)` → `shifts`: solo un turno del **mismo** empleado y sucursal |
+| `operational_date` | D-46 |
+| `started_at`, `ended_at` | instantes **efectivos** (tras correcciones); `ended_at` nunca se inventa |
+| `status` | `OPEN` / `REVIEW` (requiere corrección, sin salida) / `CLOSED`; `CHECK (status = 'CLOSED') = (ended_at IS NOT NULL)` |
+| `origin` | `KIOSK` / `CORRECTION` |
+| `policy_snapshot` | política efectiva usada (tolerancia, ventana, corte, pausas, límite de jornada abierta) — RN-CAL-05 |
+| `version`, `created_by`, timestamps | concurrencia optimista (cada checada y corrección la incrementa) |
 ```sql
-UNIQUE (organization_id, device_id, client_event_id)   -- reenviar no duplica
--- trigger forbid_mutation + REVOKE UPDATE, DELETE
+CREATE UNIQUE INDEX work_sessions_one_open ON attendance.work_sessions (organization_id, employee_id) WHERE status = 'OPEN';     -- D-40
+CREATE UNIQUE INDEX work_sessions_one_per_shift ON attendance.work_sessions (organization_id, shift_id) WHERE shift_id IS NOT NULL;
+EXCLUDE USING gist (employee_id WITH =, tstzrange(started_at, ended_at, '[)') WITH &&) WHERE (ended_at IS NOT NULL)            -- jornadas cerradas no se cruzan
 ```
-`punch_event_voids` (anulaciones, solo-agregar) y la vista `effective_punch_events` (`security_invoker = true`, respeta RLS) permiten corregir sin tocar la original.
+Trigger `guard_work_session`: solo se liga a turnos **oficiales** (`SCHEDULED` + horario `PUBLISHED`); no se cierra con una pausa abierta; una jornada cerrada no se reabre. Trigger en `shifts`: un turno con jornada no se cancela.
 
-### `attendance_corrections` / `correction_lines` / `incidents`
-- **Correcciones**: cabecera con `reason NOT NULL`, solicitante, decisión; líneas `ADD`/`VOID` con valores anterior y nuevo. Reglas de autorización (alcance por sucursal donde ocurrió la jornada, **no corregir la propia**, administrador solo dentro de su negocio) en el backend con pruebas; aislamiento entre negocios por RLS.
-- **Incidencias**: `type` (ver RN-INC-01), `status`, `resolution`, `details` jsonb; `UNIQUE (attendance_record_id, type)`.
+### `events` — checadas físicas (INMUTABLES, D-12/D-38)
+`branch_id` (sucursal del kiosco), `employee_id`, `work_session_id`, `break_id` (en pausas), `type` (`CLOCK_IN`/`BREAK_START`/`BREAK_END`/`CLOCK_OUT`), **`client_event_id`**, **`device_id`**, **`occurred_at`** (hora del servidor en línea), **`received_at`**, **`source`** (`KIOSK_ONLINE`/`KIOSK_OFFLINE_SYNC`), `time_source` (`SERVER`/`DEVICE`).
+```sql
+CONSTRAINT events_idempotency UNIQUE (organization_id, device_id, client_event_id)   -- D-54
+-- trigger forbid_mutation (UPDATE/DELETE/TRUNCATE) + sin privilegios
+```
+
+### `breaks` — pausas (D-14, D-49)
+`work_session_id`, `sequence`, `started_at`, `ended_at` (nunca se inventa, D-50), `allowed_minutes` y `tolerance_minutes` (copia de la política), **`duration_minutes`** y **`exceeded_minutes`** = columnas **generadas** (minutos con segundos truncados), `origin`, `version`. `UNIQUE (organization_id, work_session_id, sequence)`; una sola pausa abierta por jornada. `max_breaks` vive en la política: 2 pausas no requieren migración.
+
+### `incidents`
+`branch_id`, `employee_id`, `work_session_id` (nullable), `shift_id` (nullable; la `FALTA` no tiene jornada), `operational_date`, `type` (ver RN-INC-01), `status` (`OPEN`/`RESOLVED`), `details`, `detected_by` (`KIOSK`/`RECONCILER`/`CORRECTION`), `resolution` (`CORRECTED`/`JUSTIFIED`/`CONFIRMED`/`DISMISSED`) + `resolved_at`, `resolved_by`, `resolution_reason` (obligatorio), `resolution_correction_id`.
+```sql
+UNIQUE (organization_id, work_session_id, type) WHERE work_session_id IS NOT NULL AND status = 'OPEN'
+UNIQUE (organization_id, shift_id) WHERE type = 'FALTA'          -- una falta por turno, aunque se resuelva (D-44)
+-- trigger: una incidencia resuelta no se modifica
+```
+
+### `corrections` — correcciones (solo-agregar, D-51/D-52/D-53)
+`branch_id` (donde ocurrió la jornada), `employee_id`, `work_session_id`, `break_id`, `incident_id`, `action` (`CREATE_SESSION`, `SET_CLOCK_IN`, `SET_CLOCK_OUT`, `SET_BREAK_START`, `SET_BREAK_END`, `LINK_SHIFT`, `UNLINK_SHIFT`), `original_value`, `corrected_value`, `before`/`after` (jornada completa), `reason` (`CHECK` no vacío), `corrected_by`, `corrected_at`. Trigger: **nadie corrige su propia jornada** (la membresía del corrector ligada a esa ficha de empleado ⇒ rechazo).
+
+### Valores derivados (se calculan, no se guardan)
+Diferencia de llegada (D-41) y de salida (D-65), duración real (D-64), minutos y exceso acumulados de pausas, estado de llegada (D-43) y estados del tablero (D-60).
 
 ## 9. Casos difíciles
 
@@ -259,9 +269,9 @@ UNIQUE (organization_id, device_id, client_event_id)   -- reenviar no duplica
 | Fuga entre negocios | RLS forzado + FKs compuestas + rol sin `BYPASSRLS` + contexto obligatorio + CI |
 | Zona horaria | UTC en BD; negocio con zona obligatoria; sucursal hereda o sobrescribe |
 | Turno 7 PM → 3 AM | Turno guarda instantes reales; Salida va a la jornada abierta; `business_date` = día de inicio |
-| Olvido de salida | `review_due_at` ⇒ `REVIEW` + incidencia; nada se inventa |
-| Retardo 7:12 vs 7:00 (tol. 10) | delta 12, `LATE`, `late_minutes = 12`, incidencia; 7:08 ⇒ delta 8, `ON_TIME`, sin incidencia |
-| Dos pausas el día de mañana | Filas en `attendance_breaks`; `max_breaks = 2` en política; sin migración |
+| Olvido de salida | primer corte tras el fin del turno ⇒ `REVIEW` + `SALIDA_OLVIDADA`; nada se inventa |
+| Retardo 7:12 vs 7:00 (tol. 10) | diferencia 12 (calculada) + incidencia `RETARDO`; 7:08 ⇒ 8, sin incidencia |
+| Dos pausas el día de mañana | Filas en `breaks`; `max_breaks = 2` en política; sin migración |
 | Offline futuro | `client_event_id` + `device_id` + `occurred_at`/`received_at` + `source`; el reenvío es idempotente |
 | Misma persona en dos negocios | Una fila en `auth.users`, dos membresías |
 | Administrador intenta cambiar contraseña global | Sin privilegios sobre `auth.user_credentials` |
@@ -269,9 +279,9 @@ UNIQUE (organization_id, device_id, client_event_id)   -- reenviar no duplica
 | Política de empleado | Solo el override; efectivo calculado |
 | Baja de empleado | `INACTIVE`, `pin_hash = NULL` (CHECK), historial intacto |
 
-## 10. Procesos programados (fases 3+)
+## 10. Procesos programados (Fase 3)
 
-Cada minuto, con candado de Postgres, por cada negocio de `core.list_active_organizations()` en **su propio contexto** (RLS activo): marcar jornadas con `review_due_at <= now()` como `REVIEW`; crear `ABSENT` + `FALTA` para turnos terminados sin Entrada; detectar pausas abiertas excesivas.
+`ReconcilerService` (comando `node dist/src/cli/reconcile.js` o, opcionalmente, dentro de la API con `RECONCILE_INTERVAL_SEC`): por cada negocio de `core.list_active_organizations()`, en **su propio contexto** (RLS activo, rol `app_user`) y con un candado consultivo por negocio: `FALTA` para turnos oficiales terminados sin jornada; `REVIEW` + `SALIDA_OLVIDADA` al primer corte posterior al fin del turno; `REVIEW` + `JORNADA_ABIERTA_EXCEDIDA` para jornadas sin turno abiertas más de `max_open_session_minutes`; `REGRESO_COMIDA_FALTANTE` si la pausa seguía abierta. Idempotente (índices únicos + actualizaciones condicionadas). La misma revisión se hace al identificarse el empleado.
 
 ## 11. Volumen
 

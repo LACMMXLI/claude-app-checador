@@ -337,6 +337,20 @@ describe('pausas (D-14, D-49, D-50) y Salida', () => {
   });
 });
 
+describe('duración real con cambio de horario (D-64)', () => {
+  it('(44) jornada real que cruza el fin del horario de verano: 22:00 → 06:00 dura 540 min reales', async () => {
+    const p = await F.employee('Xime', F.VEN);
+    now = at('2026-10-31', '22:00');
+    const r = await F.punch(F.kioskVEN, p, 'CLOCK_IN');
+    now = at('2026-11-01', '06:00');
+    const out = await F.punch(F.kioskVEN, p, 'CLOCK_OUT');
+    expect(out.elapsedMinutes).toBe(540);
+    const d = await world.attendanceQuery.sessionDetail(F.ctx, F.admin, r.workSessionId);
+    expect(d.effective.metrics.elapsedMinutes).toBe(540);
+    expect(d.effective.operationalDate).toBe('2026-10-31');
+  });
+});
+
 describe('información al empleado en el kiosco (D-57, D-59)', () => {
   it('muestra su nombre, su turno OFICIAL y solo las acciones posibles; nada de otros empleados ni datos administrativos', async () => {
     const p = await F.employee('Vale', F.VEN);
