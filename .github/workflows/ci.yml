@@ -55,6 +55,13 @@ jobs:
       - name: Pruebas (incluye aislamiento A↔B de lectura/escritura y detección de tablas sin protección)
         run: pnpm test
 
+      - name: E2E del panel (Playwright + API + PostgreSQL reales)
+        env:
+          E2E_PG_SUPER_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          pnpm --filter @checador/web exec playwright install --with-deps chromium
+          ./scripts/e2e.sh
+
       - name: Smoke de arranque de la API (compilada)
         env:
           DATABASE_URL: postgresql://app_user:ci-app-user@localhost:5432/checador_ci

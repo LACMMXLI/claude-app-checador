@@ -1,6 +1,6 @@
 # 03 · Arquitectura
 
-> **Versión 1.0 — CONGELADA.** Estado: **Fase 0 implementada y probada** (ver §10 y `04-operacion.md`).
+> **Versión 1.1 — CONGELADA.** Estado: **Fases 0 y 1 implementadas y probadas** (ver §10 y `04-operacion.md`). **Aún NO desplegable:** faltan los criterios de Docker y GitHub Actions (§9).
 
 ## 1. Resumen
 
@@ -8,14 +8,14 @@
 
 | Capa | Tecnología | Estado |
 |---|---|---|
-| Backend | **NestJS 11** (API REST + SSE) sobre servicios de dominio sin decoradores (testeables con PostgreSQL real) | Fase 0: esqueleto + `/health`; servicios de dominio completos |
+| Backend | **NestJS 11** (API REST + SSE) sobre servicios de dominio sin decoradores (testeables con PostgreSQL real) | Fase 1: autenticación, sesiones, negocio activo, RBAC y administración base |
 | Base de datos | **PostgreSQL 16** — RLS, constraints, índices parciales, exclusiones (`btree_gist`), triggers | Fase 0 completa |
 | Acceso a datos | **Drizzle ORM** para consultas tipadas; **migraciones SQL propias** como fuente de verdad | Fase 0 |
 | Validación | **Zod** | Fase 0 |
-| Frontend | **Next.js + React + Tailwind**: `/kiosk` (táctil) y `/admin` (panel); textos por **sistema de traducciones** (es-MX) | Fase 1+ |
+| Frontend | **Next.js 16 + React 19**, CSS propio (sin framework visual todavía); panel funcional responsive; textos por **sistema de traducciones** (es-MX). El panel reenvía `/api/*` a la API (proxy del mismo origen) | Fase 1: panel. Kiosco visual: Fase 3 |
 | Tiempo real | **SSE** | Fase 4 |
 | Excel | `exceljs` | Fase 6 |
-| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) | Fase 0: 144 pruebas |
+| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel) | 179 pruebas + 1 E2E |
 | CI | GitHub Actions: typecheck → build → migraciones desde cero → `check:tenancy` → pruebas → smoke | Fase 0 |
 
 **Por qué NestJS y no solo rutas API de Next.js:** módulos que crecerán (mesas, adelantos, nómina, comunicados), procesos en segundo plano con scheduler, tiempo real con estado en memoria, múltiples clientes (kiosco, panel, móvil) y el **contexto de negocio** como pieza transversal y auditable.
@@ -64,6 +64,12 @@ Lo único que ocurre antes de conocer el negocio: `auth.resolve_kiosk_token`, `a
 - Login: correo + contraseña (argon2id). Si el usuario tiene un negocio activo entra directo; si tiene varios, **elige negocio**. La sesión queda **ligada a un solo negocio**.
 - Membresía = usuario ↔ negocio; **ficha de empleado opcional**. Alcance por asignación de rol (todas las sucursales o lista).
 
+### 2.6.1 Sesión HTTP (Fase 1)
+- Cookie `sid` (`__Host-sid` en producción): `HttpOnly`, `SameSite=Lax`, `Secure` en producción, `Max-Age` 12 h. El valor es un secreto de 256 bits; en BD solo su SHA-256 (`auth.sessions`).
+- Cada petición: cookie → `resolve_session` (identidad activa + negocio activo vigente) → `TenantContext` → `RbacService.loadAccess` (**sin caché**: los permisos se calculan en cada petición, así un cambio de negocio o de membresía no deja nada del anterior).
+- **Anti-CSRF:** toda petición que modifica estado exige `X-Requested-With: checador` (además de `SameSite`). La API del dispositivo (`/api/kiosk/*`) usa `Authorization: Bearer` y no cookies.
+- El panel (Next.js) es el único servicio expuesto: `/api/*` se reenvía a la API por red interna, de modo que la cookie es de primera parte.
+
 ### 2.7 Procesos en segundo plano (Fase 3+)
 `core.list_active_organizations()` → cada negocio se procesa en **su propia transacción con su propio contexto**. Un error en uno no afecta a los demás; los suspendidos se omiten.
 
@@ -97,12 +103,14 @@ Canales por `organization_id:branch_id`; al abrir el stream se verifica el alcan
 │  │  ├─ container.ts                # raíz de composición (sin PlatformDb)
 │  │  └─ app.module.ts, main.ts
 │  └─ test/                          # 14 archivos, PostgreSQL real
+├─ apps/web/                         # panel Next.js (proxy /api, i18n, E2E Playwright)
+├─ scripts/e2e.sh                    # E2E contra API + PostgreSQL reales
 ├─ docs/                             # reglas, modelo, arquitectura, operación
 ├─ docker-compose.yml                # producción (Coolify): db → init → api (+ perfil tools)
 ├─ docker-compose.dev.yml
 └─ .github/workflows/ci.yml
 ```
-`apps/web` (Next.js) y `packages/shared` (esquemas Zod/tipos compartidos) se crean al iniciar el frontend (Fase 1), no antes. Los errores de dominio llevan **códigos estables** (`DomainError.code`), nunca textos: el cliente los traduce (RN-I18N-01).
+`apps/web` (Next.js) contiene el panel (Fase 1). `packages/shared` (esquemas/tipos compartidos) se creará cuando haya código que compartir de verdad (p. ej. el kiosco). Los errores de dominio llevan **códigos estables** (`DomainError.code`), nunca textos: el cliente los traduce (RN-I18N-01).
 
 ## 6. Flujos clave
 
@@ -120,7 +128,7 @@ sequenceDiagram
   API->>DB: BEGIN; set org; bloquear jornada; validar transición; insertar punch_event; recalcular; incidencias; auditoría; COMMIT
   API-->>K: confirmación (hora del servidor)
 ```
-**Ya implementado en Fase 0:** emparejamiento, token (negocio+sucursal+dispositivo), identificación por PIN con bloqueo exponencial y registro de intentos. El token **nunca** puede cruzar a otro negocio; la sucursal sale del token.
+**Ya implementado (Fases 0–1):** alta de dispositivo desde el panel, token (negocio+sucursal+dispositivo) generar/revocar/regenerar, activar/desactivar, emparejamiento por código, `POST /api/kiosk/identify` con pausa progresiva por dispositivo (D-21) y registro de intentos. El token **nunca** puede cruzar a otro negocio; la sucursal sale del token.
 
 ### 6.2 Corrección (Fase 5)
 Motivo obligatorio ⇒ validar misma organización (RLS), sucursal donde ocurrió la jornada dentro del alcance, **no es la propia jornada** ⇒ transacción: checadas nuevas + anulaciones + recálculo + incidencia + auditoría.
@@ -134,10 +142,10 @@ Motivo obligatorio ⇒ validar misma organización (RLS), sucursal donde ocurri�
 | Empleado en kiosco | PIN de 6 dígitos + token ⇒ sesión corta |
 | Plataforma | CLI con `platform_ops`; credenciales fuera de la API |
 
-- **PIN:** aleatorio criptográfico, sin triviales; `HMAC-SHA256(PIN_PEPPER, organización ‖ PIN)`; único por negocio; se muestra una vez; el empleado no lo cambia; restablecer invalida el anterior; auditoría sin el PIN; bloqueo `pinMaxAttempts`/`pinLockoutSec` con retroceso exponencial (tope 1 h) por kiosco.
+- **PIN:** aleatorio criptográfico, sin triviales; valor indexable `HMAC-SHA256(PIN_PEPPER, organization_id + ":" + PIN)` (único por negocio, sin correlación entre negocios); se muestra una vez; el empleado no lo cambia; restablecer invalida el anterior; auditoría y logs sin el PIN; **pausa corta y progresiva por dispositivo (D-21)**: 10 s → … → tope 120 s, nunca bloqueos largos del kiosco compartido.
 - **Secretos** solo como variables de entorno en Coolify. **HTTPS** por el proxy. **Hora:** servidor en UTC. Mensajes de error genéricos para PIN y credenciales.
 
-## 8. Kiosco (UX, Fase 1+)
+## 8. Kiosco (UX, Fase 3)
 
 PWA en pantalla completa; **logo y nombre del negocio** y de la sucursal, campo de código y teclado numérico grande; solo los botones permitidos; reloj del servidor; **"Sin conexión"** visible (MVP: contingencia = corrección manual con motivo); "lanzador del empleado" que podrá alojar mesas, adelantos, comunicados.
 
@@ -145,14 +153,20 @@ PWA en pantalla completa; **logo y nombre del negocio** y de la sucursal, campo 
 
 `docker-compose.yml`: `db` (postgres:16) → `init` (bootstrap de roles + migraciones + `check:tenancy`, idempotente en cada despliegue) → `api` (solo `app_user`; healthcheck `/health`). Perfil `tools` con el CLI de plataforma. Variables en `.env.example`. **Respaldos fuera del servidor** con prueba de restauración (la base contiene a todos los negocios: cifrar y restringir acceso). Detalle y *runbook* en `04-operacion.md`.
 
-> Nota de honestidad: `Dockerfile` y `docker-compose.yml` están escritos pero **no se pudieron ejecutar en el entorno de desarrollo (sin daemon Docker)**; sí se verificó el mismo flujo con los scripts compilados contra PostgreSQL real (bootstrap → migrate → check-tenancy → crear Fatboy → arrancar API → `/health`).
+Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_URL=http://api:3000`. La API usa `COOKIE_SECURE=true` (por eso el panel debe servirse por HTTPS).
+
+**Criterios OBLIGATORIOS antes de considerar el sistema desplegable** (pendientes):
+1. En un entorno con Docker: construir ambos `Dockerfile`, `docker compose up` sobre base limpia, migraciones, pruebas completas, API y panel arriba.
+2. Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real.
+
+> Estado honesto: los `Dockerfile`/`docker-compose.yml` no se han podido ejecutar (el entorno de desarrollo no tiene Docker). Sí se verificó el flujo equivalente con los artefactos compilados contra PostgreSQL real: bootstrap → migrate → `check:tenancy` → alta de Fatboy → API → panel (incluido el servidor *standalone* de Next) → E2E con Playwright. GitHub Actions aún no ha mostrado ejecuciones para esta rama.
 
 ## 10. Plan por fases
 
 | Fase | Entrega | Estado |
 |---|---|---|
 | **0 · Fundaciones + multi-tenant** | PostgreSQL + migraciones, `organizations`, `branches`, identidades globales, membresías, roles y alcance por sucursal, empleados, kioscos, contexto seguro de negocio, RLS, roles sin bypass, auditoría, políticas con herencia, pruebas de aislamiento A↔B, verificación de catálogo en CI, CLI, Docker/CI | ✅ **Hecha** |
-| 1 · Núcleo (API + panel) | Login/sesión HTTP, CRUD de sucursales/empleados/kioscos en panel, alta de usuarios por el administrador | Pendiente |
+| **1 · Identidad, sesión y administración base** | D-21; login/logout, sesión por cookie con rotación, selector y cambio de negocio, invitaciones de un solo uso, RBAC HTTP por sucursal, CRUD de sucursales/empleados/kioscos/políticas (override vs efectiva), auditoría; panel web funcional; E2E | ✅ **Hecha** (pendiente: criterios de despliegue §9) |
 | 2 · Horarios | Plantillas, programación semanal, turnos nocturnos | Pendiente |
 | 3 · Motor de asistencia | Kiosco, máquina de estados, pausas, cálculo, incidencias, corte operativo, jobs por negocio | Pendiente |
 | 4 · Tablero en vivo | SSE por negocio/sucursal | Pendiente |

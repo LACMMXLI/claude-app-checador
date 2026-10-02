@@ -41,6 +41,8 @@ services:
       DATABASE_URL: postgresql://app_user:${APP_USER_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
       PIN_PEPPER: ${PIN_PEPPER:?define PIN_PEPPER (>= 32 caracteres)}
       PORT: ${PORT:-3000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}   # cookie __Host-sid con Secure: el panel debe servirse por HTTPS
+      NODE_ENV: production
       TZ: UTC
     expose: ["3000"]
     healthcheck:
@@ -49,6 +51,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  # Panel web (Next.js). Es el ÚNICO servicio que se publica con dominio en Coolify; reenvía /api a la API
+  # por la red interna, así la cookie de sesión es de primera parte.
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      API_INTERNAL_URL: http://api:${PORT:-3000}
+      PORT: 3001
+    expose: ["3001"]
 
   # Herramienta de operación (NO arranca sola):
   #   docker compose --profile tools run --rm platform create-organization --name Fatboy --slug fatboy --timezone America/Tijuana ...

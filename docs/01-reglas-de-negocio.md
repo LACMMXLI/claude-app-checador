@@ -1,6 +1,6 @@
 # 01 · Reglas de negocio — Reloj checador (plataforma multi-negocio)
 
-> **Versión 1.0 — CONGELADA.** Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
+> **Versión 1.1 — CONGELADA** (1.1 = ajuste D-21 de protección del PIN; reglas funcionales sin cambios). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
 > Fatboy es el **primer negocio (tenant)**; ninguna regla ni dato está diseñado específicamente para Fatboy.
 > Los valores `default` son los del **nivel plataforma** y se pueden sobrescribir por negocio, sucursal o empleado según la jerarquía de configuración (§10).
 
@@ -86,7 +86,7 @@
 - **RN-PIN-05** El empleado **no puede cambiarlo** en el MVP. Lo genera/restablece el administrador o el encargado con permiso.
 - **RN-PIN-06** **Restablecer invalida inmediatamente el anterior.** La baja del empleado invalida el PIN.
 - **RN-PIN-07** Auditoría del alta/restablecimiento (quién, cuándo, a quién), **sin registrar nunca el PIN** ni su hash.
-- **RN-PIN-08** **Protección contra intentos masivos:** `pin_max_attempts` (5) fallos consecutivos en un kiosco ⇒ bloqueo `pin_lockout_sec` (60 s). Todo intento se registra. Mensaje de error genérico ("Código no válido") que no revela si el PIN existe.
+- **RN-PIN-08** **Protección contra intentos masivos sin inutilizar el kiosco (D-21):** pausa POR DISPOSITIVO. Con `pin_max_attempts` (5) fallos consecutivos ⇒ pausa de `pin_lockout_sec` (10 s); cada fallo posterior duplica la pausa (20, 40, 80 s…) hasta el tope `pin_lockout_max_sec` (120 s; máximo configurable 300 s). **Nunca** se bloquea el kiosco por periodos largos. Un acierto reinicia el contador. Cada pausa se registra en auditoría como evento de seguridad. Todo intento se registra (sin el PIN). Mensaje de error genérico ("Código no válido").
 - **RN-PIN-09** Un **kiosco** se empareja desde el panel con un código de un solo uso y de vencimiento corto. Su token pertenece obligatoriamente a **`organization_id + branch_id + device_id`**, es revocable y se guarda hasheado.
 - **RN-PIN-10** Tras identificarse, la sesión del empleado es corta (default 20 s de inactividad) y se limita a ese empleado, kiosco y negocio. Tras una checada se muestra confirmación unos segundos y se regresa a la pantalla inicial.
 
@@ -170,7 +170,8 @@ Variables: `Hp_ini`/`Hp_fin` programados; `Hr_ini`/`Hr_fin` = primera Entrada / 
 | `max_hours_unscheduled` | 14 | negocio · sucursal |
 | `debounce_sec` | 60 | negocio · sucursal |
 | `pin_max_attempts` | 5 | negocio · sucursal |
-| `pin_lockout_sec` | 60 | negocio · sucursal |
+| `pin_lockout_sec` (pausa inicial) | 10 | negocio · sucursal |
+| `pin_lockout_max_sec` (tope de pausa) | 120 (máx. 300) | negocio · sucursal |
 | `week_start_day` (1 = lunes) | 1 | negocio |
 
 La zona horaria **no es una política**: es un atributo del negocio (obligatorio) y de la sucursal (opcional).
@@ -223,6 +224,9 @@ La zona horaria **no es una política**: es un atributo del negocio (obligatorio
 - **RN-IDN-04** Login: correo + contraseña. Si el usuario pertenece a un negocio entra directo; si pertenece a varios, **elige negocio**. El negocio queda fijado en la sesión.
 - **RN-IDN-05** Cada negocio debe tener siempre al menos un administrador activo.
 - **RN-IDN-06** Cambios de rol, permiso, alcance o membresía se auditan.
+- **RN-IDN-07** **Alta de usuarios por invitación:** el administrador invita un correo con rol y alcance; el sistema genera un enlace de un solo uso (token aleatorio, guardado hasheado, con vencimiento, nunca en logs) que se muestra una vez al administrador. Si el correo ya es una identidad global, no se crea otra: el invitado prueba su contraseña actual y solo se agrega la membresía. El administrador nunca fija ni modifica la contraseña global.
+- **RN-IDN-08** **Sesión:** cookie `HttpOnly`, `SameSite`, con expiración; `Secure` en producción. Nunca tokens en `localStorage`. El identificador de sesión rota al iniciar sesión y al cambiar de negocio. Al cambiar de negocio se revalida la membresía y no se conserva ningún permiso ni dato del negocio anterior.
+- **RN-IDN-09** Membresía desactivada ⇒ pierde el acceso solo a ese negocio (también en sesiones abiertas). Identidad deshabilitada ⇒ pierde todo acceso. Negocio suspendido ⇒ nadie opera en él.
 
 Modelo de permisos: **roles con permisos granulares** y **alcance** por asignación (todas las sucursales o lista).
 

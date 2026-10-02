@@ -25,6 +25,21 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.0 y mod
 | **D-19** | Identidad global + membresías; elige negocio si tiene varios; contexto fijado en sesión; PIN único por negocio; negocios por script interno; sin subdominios; token de kiosco = `organization_id + branch_id + device_id`; el frontend nunca decide el `organization_id`. | RN-ORG-*, RN-IDN-* |
 | **D-20** | **Jerarquía de políticas Plataforma → Negocio → Sucursal → Empleado**; solo overrides; política efectiva calculada; aplica a tolerancia, entrada anticipada, pausas, corte operativo y futuras políticas heredables. | RN-CFG-* |
 
+| **D-21** | **Protección del PIN sin inutilizar el kiosco compartido.** Pausa por `device_id`: 5 fallos consecutivos → 10 s; los siguientes duplican la pausa (20, 40, 80…) con **tope global de 120 s** (configurable, máximo 300 s; nunca 1 h). Un acierto reinicia el contador. Cada pausa queda en auditoría como `security.pin_pause_started`. Parámetros `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec` (negocio/sucursal). Valor indexable del PIN = `HMAC-SHA256(PIN_PEPPER, organization_id + ":" + pin)`; nunca en texto plano ni en logs. | RN-PIN-03, RN-PIN-08 |
+
+## Aclaraciones de la Fase 1 (sin reabrir reglas funcionales)
+
+- **Sesión:** cookie `HttpOnly` + `SameSite=Lax` + expiración (12 h); en producción `Secure` y prefijo `__Host-`. Nunca `localStorage`. Se **rota** el identificador al iniciar sesión y al cambiar de negocio; logout la revoca en el servidor.
+- **Identidad ≠ negocio activo:** `login → identidad → membresías → negocio activo (en la sesión, validado por el servidor) → TenantDb`. Una membresía inactiva o un negocio suspendido quitan el negocio activo de las sesiones vivas; una identidad deshabilitada invalida todas sus sesiones.
+- **Invitaciones (D-11):** el admin invita un correo con rol y alcance; el token (256 bits, guardado hasheado, uso único, 72 h) se muestra una vez al admin. Identidad nueva: el invitado elige su contraseña. Identidad existente: prueba su contraseña ACTUAL y solo se agrega la membresía (nunca se cambia su contraseña).
+- **ENCARGADO** incluye por defecto `employees.manage` y `employees.pin.manage`, siempre limitados a su alcance de sucursales (RN-COR/RN-ROL: "opcional por permiso" → cada negocio puede quitarlo).
+- **Kioscos:** el dispositivo (activo/inactivo) y su token (generar/revocar/regenerar) son cosas separadas.
+
+## Criterios obligatorios ANTES de considerar el sistema desplegable
+
+- [ ] `Dockerfile` (api y web) construidos y `docker compose up` sobre una base limpia: migraciones, pruebas completas y API/panel arriba. *(No verificado aún: el entorno de desarrollo no tiene Docker.)*
+- [ ] Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (typecheck, build, migraciones desde cero, `check:tenancy`, pruebas, E2E, smoke).
+
 ## Ajustes por el congelamiento (respecto al borrador anterior)
 
 - Se **eliminó** `retardo_cuenta_como_falta_min` (contradice D-4).

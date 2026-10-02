@@ -2,7 +2,7 @@
 
 Plataforma para control de asistencia de negocios con varias sucursales: kiosco con PIN, horarios rotativos, turnos nocturnos, incidencias, correcciones auditadas, tablero en tiempo real y reportes. **Multi-tenant desde el inicio** (Plataforma → Negocio → Sucursales → Empleados) y primer módulo de un sistema de empleados más amplio. **Fatboy es el primer negocio (tenant).**
 
-**Estado:** reglas v1.0 y modelo v1.0 **congelados** · **Fase 0 implementada y probada** (fundaciones multi-tenant). Siguiente: Fase 1.
+**Estado:** reglas y modelo v1.1 **congelados** · **Fase 0** (fundaciones multi-tenant) y **Fase 1** (identidad, sesión, negocio activo, RBAC y panel de administración base) implementadas y probadas. **Aún no desplegable**: faltan verificar Docker y una ejecución real de GitHub Actions.
 
 ## Documentación
 
@@ -16,7 +16,7 @@ Plataforma para control de asistencia de negocios con varias sucursales: kiosco 
 
 ## Stack
 
-TypeScript · NestJS · PostgreSQL 16 (RLS) · Drizzle ORM + migraciones SQL · Zod · Vitest · Docker Compose · Coolify. Frontend (Next.js) desde la Fase 1.
+TypeScript · NestJS · Next.js · PostgreSQL 16 (RLS) · Drizzle ORM + migraciones SQL · Zod · Vitest · Playwright · Docker Compose · Coolify.
 
 ## Comandos
 
@@ -25,4 +25,5 @@ pnpm install
 pnpm typecheck && pnpm build
 pnpm test              # pruebas contra PostgreSQL real (aislamiento, RLS, PIN, kioscos, políticas...)
 pnpm check:tenancy     # lo que ejecuta CI: toda tabla multi-tenant debe estar protegida
+./scripts/e2e.sh       # E2E del panel contra API y PostgreSQL reales
 ```

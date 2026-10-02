@@ -1,7 +1,7 @@
 # 02 · Modelo de datos (PostgreSQL) — multi-negocio
 
-> **Versión 1.0 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
-> Estado de implementación: **Fase 0 implementada** (esquemas `platform`, `auth`, `core`, `audit`; migraciones en `apps/api/db/migrations`). Las tablas de `scheduling` y `attendance` están **diseñadas** aquí y se crean en las fases 2–3.
+> **Versión 1.1 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
+> Estado de implementación: **Fases 0 y 1 implementadas** (esquemas `platform`, `auth`, `core`, `audit`; migraciones `0001`–`0006` en `apps/api/db/migrations`). Las tablas de `scheduling` y `attendance` están **diseñadas** aquí y se crean en las fases 2–3.
 
 ## 1. Convenciones
 
@@ -99,6 +99,9 @@ Operaciones de plataforma: alta/suspensión de negocio, restablecimiento de cont
 `id`, `email` (único, minúsculas), `display_name`, `status` (`ACTIVE`/`DISABLED`; lo gestiona la plataforma), `created_at`, `updated_at`.
 **RLS especial:** un usuario es visible solo si es miembro del negocio activo (`EXISTS` en `organization_memberships`) o es el usuario de la sesión. El administrador de un negocio **no ve a usuarios de otros negocios**.
 
+### `auth.sessions` (Fase 1)
+`id`, `token_hash` (SHA-256 del identificador que viaja en la cookie; **nunca** el identificador), `user_id`, `organization_id` + `membership_id` (negocio activo; ambos nulos hasta elegir), `created_at`, `last_seen_at`, `expires_at`, `revoked_at`, `ip`, `user_agent`. FK compuesta a la membresía. **RLS forzado sin políticas y sin privilegios para `app_user`:** solo se usa por funciones-puerta (`create_session`, `resolve_session`, `switch_session_organization`, `revoke_session`). Cambiar de negocio revoca la fila y crea otra (rotación).
+
 ### `auth.user_credentials`
 `user_id` (PK), `password_hash` (argon2id), `password_changed_at`, `failed_attempts`, `locked_until`.
 **`app_user` no tiene ningún privilegio sobre esta tabla.** La API accede solo vía funciones-puerta; un administrador de negocio no puede leer ni cambiar la contraseña global. El restablecimiento lo hace `platform_ops` (CLI). *(Recuperación por correo: fase posterior; el modelo ya separa credenciales.)*
@@ -141,8 +144,11 @@ CHECK (valid_to IS NULL OR valid_to >= valid_from)
 Un usuario con varias sucursales = **una cuenta, una membresía, una asignación con varias filas de alcance**.
 
 ### `core.kiosk_devices` y `core.kiosk_pairing_codes`
-- `kiosk_devices`: `id` (= `device_id`), `organization_id`, `branch_id`, `name`, `token_prefix` (único global), `token_hash` (SHA-256 del secreto; nunca el token), `status` (`ACTIVE`/`REVOKED`), `last_seen_at`, `revoked_at`. **El token pertenece a `organization_id + branch_id + device_id`.**
+- `kiosk_devices`: `id` (= `device_id`), `organization_id`, `branch_id`, `name`, `status` (`ACTIVE`/`INACTIVE`, del dispositivo) y su token por separado: `token_prefix` (único global), `token_hash` (SHA-256 del secreto; nunca el token), `token_issued_at`, `token_revoked_at` (prefijo y hash ambos nulos = sin token), `last_seen_at`. **El token pertenece a `organization_id + branch_id + device_id`**; regenerar lo reemplaza y el anterior deja de funcionar.
 - `kiosk_pairing_codes`: `id`, `organization_id`, `branch_id`, `code_hash`, `expires_at`, `used_at`, `created_by`. Un solo uso, vencimiento corto.
+
+### `core.invitations` (Fase 1)
+`id`, `organization_id`, `email`, `role_id` (FK compuesta), `scope`, `branch_ids` (uuid[]), `token_hash` (único; nunca el token), `expires_at`, `accepted_at`, `accepted_user_id`, `revoked_at`, `created_by`. RLS por negocio. Se acepta por la función-puerta `auth.accept_invitation` (uso único, atómica): crea la identidad solo si no existe, la membresía y la asignación de rol (las sucursales deben ser del mismo negocio por FK compuesta) y audita.
 
 ### `core.pin_attempts`
 `id`, `organization_id`, `device_id`, `attempted_at`, `success`, `employee_id` (null si falló). Alimenta el bloqueo `pin_max_attempts`/`pin_lockout_sec`. **No guarda el PIN intentado.**
@@ -167,7 +173,7 @@ Más rangos por parámetro (`CHECK (break_allowed_min BETWEEN 0 AND 600)`, `week
 
 **Política efectiva** (`resolveEffectivePolicy`, función pura con pruebas): `plataforma → ORGANIZATION → BRANCH → EMPLOYEE`, campo por campo (`COALESCE` en orden inverso). Ejemplo: plataforma 35 · Fatboy (sin override) 35 · San Marcos 35 · Venecia 40 · empleado X (override 30) ⇒ efectivo de X = 30.
 
-Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_hours_unscheduled`, `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `week_start_day` (tabla de defaults y niveles en `01 §10`).
+Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_hours_unscheduled`, `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec`, `week_start_day` (tabla de defaults y niveles en `01 §10`).
 
 ## 6. Esquema `audit`
 
