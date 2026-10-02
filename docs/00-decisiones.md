@@ -27,6 +27,30 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.0 y mod
 
 | **D-21** | **Protección del PIN sin inutilizar el kiosco compartido.** Pausa por `device_id`: 5 fallos consecutivos → 10 s; los siguientes duplican la pausa (20, 40, 80…) con **tope global de 120 s** (configurable, máximo 300 s; nunca 1 h). Un acierto reinicia el contador. Cada pausa queda en auditoría como `security.pin_pause_started`. Parámetros `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec` (negocio/sucursal). Valor indexable del PIN = `HMAC-SHA256(PIN_PEPPER, organization_id + ":" + pin)`; nunca en texto plano ni en logs. | RN-PIN-03, RN-PIN-08 |
 
+| **D-22** | **Horario ≠ turno concreto.** El turno concreto (empleado, sucursal, fecha, instantes reales) es la fuente de verdad para asistencia; nunca se calcula contra una plantilla. | RN-HOR-01 |
+| **D-23** | **Plantillas separadas** de los turnos; editarlas nunca cambia turnos históricos ni publicados. MVP: **copiar semana anterior**; arquitectura lista para recurrencias. | RN-HOR-05 |
+| **D-24** | Horario semanal `DRAFT` → `PUBLISHED` (acción explícita, irreversible). Publicados: se editan/cancelan con auditoría; nunca hard delete. | RN-HOR-04 |
+| **D-25** | Estado del turno solo `SCHEDULED` / `CANCELLED`; nada de estados de asistencia. | RN-HOR-13 |
+| **D-26** | `starts_at`/`ends_at` en UTC + `timezone_snapshot`; la API trabaja con hora local y la zona efectiva de la sucursal; cambiar la zona después no reinterpreta turnos. | RN-HOR-11 |
+| **D-27** | Turnos nocturnos = un solo turno; `ends_at > starts_at`; pertenecen al día en que inician. | RN-HOR-09 |
+| **D-28** | DST con zonas IANA; hora inexistente ⇒ error; ambigua ⇒ elegir `EARLIER`/`LATER`; nunca otra hora en silencio. | RN-HOR-10 |
+| **D-29** | Sin traslapes del mismo empleado entre sucursales; exclusión en PostgreSQL con `[inicio, fin)`. | RN-HOR-03 |
+| **D-30** | ADMIN programa todo su negocio; ENCARGADO solo sus sucursales y empleados asignados a ellas. La planificación es estricta (D-17 solo aplica al kiosco). | RN-HOR-08 |
+| **D-31** | Cambios a turnos publicados auditados (antes/después, usuario, fecha, negocio, sucursal); motivo obligatorio solo al cancelar. | RN-HOR-07 |
+| **D-32** | Futuro: edición normal. En curso o terminado (y crear en el pasado): solo con `schedules.history.manage` (ADMIN) y motivo. Planificación ≠ asistencia. | RN-HOR-12 |
+
+## Decisiones técnicas de la Fase 2 (para revisión)
+
+- **Copiar semana / aplicar plantilla = copia PARCIAL segura**, no todo-o-nada: cada turno se valida y se inserta en su propio *savepoint*; lo que no puede crearse vuelve en `conflicts` con su código (traslape, empleado inactivo, sin asignación, hora inexistente por DST, ya copiado…). `dryRun` ejecuta exactamente lo mismo en una transacción que se revierte (vista previa). Es **idempotente** (un mismo turno de origen no se copia dos veces al mismo horario, garantizado por índice único) y solo escribe en semanas en `DRAFT`. Si la sucursal está desactivada o la semana destino publicada, la operación completa se rechaza con error claro.
+- **"Turno en curso" = misma restricción que terminado** (D-32 pedía "modificación restringida"): permiso de historial + motivo.
+- **Crear un turno en el pasado** también exige permiso de historial + motivo (para que no sea una puerta trasera de la corrección histórica).
+- **Duración válida** como política heredable (`shift_min_minutes` 60, `shift_max_minutes` 960) en vez de constante (principio "cero reglas quemadas").
+- **ENCARGADO** recibe por defecto `schedules.view` y `schedules.manage` (dentro de su alcance, revocable), coherente con D-30 y con la aprobación de la Fase 1 para empleados.
+- **Guardar borrador:** cada alta/edición se guarda al momento en el horario `DRAFT`; no hay un botón "guardar" aparte. Publicar exige la versión del horario que se vio (si alguien agregó un turno después, hay que recargar).
+- **Cambiar un turno de sucursal** lo mueve al horario de esa sucursal y semana (se crea en `DRAFT` si no existía).
+- **Conflictos con turnos de otras sucursales:** al encargado se le informa el rango horario del turno en conflicto, pero no su sucursal si está fuera de su alcance.
+- **Posible ajuste a una regla anterior:** RN-HOR-07 (v1.0) pedía motivo para todo cambio de un turno publicado; D-31 lo precisa (motivo solo para cancelar). Se aplicó D-31.
+
 ## Aclaraciones de la Fase 1 (sin reabrir reglas funcionales)
 
 - **Sesión:** cookie `HttpOnly` + `SameSite=Lax` + expiración (12 h); en producción `Secure` y prefijo `__Host-`. Nunca `localStorage`. Se **rota** el identificador al iniciar sesión y al cambiar de negocio; logout la revoca en el servidor.
@@ -35,9 +59,9 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.0 y mod
 - **ENCARGADO** incluye por defecto `employees.manage` y `employees.pin.manage`, siempre limitados a su alcance de sucursales (RN-COR/RN-ROL: "opcional por permiso" → cada negocio puede quitarlo).
 - **Kioscos:** el dispositivo (activo/inactivo) y su token (generar/revocar/regenerar) son cosas separadas.
 
-## Criterios obligatorios ANTES de considerar el sistema desplegable
+## Despliegue
 
-- [ ] `Dockerfile` (api y web) construidos y `docker compose up` sobre una base limpia: migraciones, pruebas completas y API/panel arriba. *(No verificado aún: el entorno de desarrollo no tiene Docker.)*
+- La validación real de Docker/Coolify (imágenes, red, HTTPS, cookies `Secure`, persistencia, reinicios) la hace el dueño en su servidor; no bloquea fases. El repositorio mantiene listos `Dockerfile`s, `docker-compose.yml`, variables y documentación (`04-operacion.md`).
 - [x] Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (typecheck, build, migraciones desde cero, `check:tenancy`, pruebas, E2E, smoke): **run #5, commit `cc1d7cb`**. Las ejecuciones #1–#4 fallaron y se corrigieron (contraseñas de roles compartidas por el clúster; carrera de navegación en el E2E).
 
 ## Ajustes por el congelamiento (respecto al borrador anterior)

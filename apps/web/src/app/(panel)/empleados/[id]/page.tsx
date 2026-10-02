@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Card, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
-import { api, type Branch, type Employee } from '@/lib/api';
+import { api, type Branch, type Employee, type Shift } from '@/lib/api';
+import { dayLabel, minutesLabel, shiftLabel } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 
@@ -16,6 +17,7 @@ export default function EmployeeDetailPage() {
   const { can } = useSession();
   const { data, error, reload } = useLoad(() => api<Detail>(`/employees/${id}`), [id]);
   const branches = useLoad(() => api<Branch[]>('/branches'));
+  const upcoming = useLoad(() => (can('schedules.view') ? api<Shift[]>(`/employees/${id}/shifts`) : Promise.resolve([] as Shift[])), [id]);
   const action = useAction();
   const [edit, setEdit] = useState({ firstName: '', lastName: '', phone: '' });
   const [assign, setAssign] = useState({ branchId: '', kind: 'TEMPORARY' as 'PRIMARY' | 'TEMPORARY', validFrom: '', validTo: '', reason: '' });
@@ -73,6 +75,27 @@ export default function EmployeeDetailPage() {
           {manage && <button className="primary" disabled={action.busy}>{t('common.save')}</button>}
         </form>
       </Card>
+      {can('schedules.view') && (
+        <Card title={t('schedule.upcoming')}>
+          {!upcoming.data ? <Loading /> : upcoming.data.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+            <table>
+              <thead><tr><th>{t('schedule.date')}</th><th>{t('common.branch')}</th><th>{t('schedule.start')} – {t('schedule.end')}</th><th>{t('schedule.duration')}</th><th>{t('common.status')}</th><th>{t('nav.schedule')}</th></tr></thead>
+              <tbody>
+                {upcoming.data.map((s) => (
+                  <tr key={s.id}>
+                    <td>{dayLabel(s.businessDate)}</td>
+                    <td>{branchName(s.branchId)}</td>
+                    <td>{shiftLabel(s)}</td>
+                    <td>{minutesLabel(s.scheduledMinutes)}</td>
+                    <td>{s.status === 'CANCELLED' ? t('schedule.cancelled') : '—'}</td>
+                    <td>{s.scheduleStatus ? t(`schedule.status.${s.scheduleStatus}`) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
       <Card title={t('employees.assignments')}>
         <table>
           <thead><tr><th>{t('common.branch')}</th><th>Tipo</th><th>{t('employees.validFrom')}</th><th>{t('employees.validTo')}</th><th>{t('common.reason')}</th></tr></thead>

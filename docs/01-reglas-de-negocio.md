@@ -1,6 +1,6 @@
 # 01 · Reglas de negocio — Reloj checador (plataforma multi-negocio)
 
-> **Versión 1.1 — CONGELADA** (1.1 = ajuste D-21 de protección del PIN; reglas funcionales sin cambios). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
+> **Versión 1.2 — CONGELADA** (1.1 = D-21 protección del PIN; 1.2 = D-22…D-32 planificación de horarios y turnos). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
 > Fatboy es el **primer negocio (tenant)**; ninguna regla ni dato está diseñado específicamente para Fatboy.
 > Los valores `default` son los del **nivel plataforma** y se pueden sobrescribir por negocio, sucursal o empleado según la jerarquía de configuración (§10).
 
@@ -112,16 +112,24 @@
 - **RN-EVT-12** **Preparado para modo offline (sin implementarlo aún).** Toda checada guarda: `client_event_id` (idempotencia), `device_id`, `occurred_at` (cuándo ocurrió), `received_at` (cuándo la recibió el servidor), `source` (origen: `KIOSK_ONLINE`, `KIOSK_OFFLINE_SYNC`, `CORRECTION`) y `time_source` (`SERVER`/`DEVICE`). La unicidad `(organización, dispositivo, client_event_id)` impide duplicados al reenviar. Online: `occurred_at = received_at` (hora del servidor).
 - **RN-EVT-13** **MVP sin internet:** el kiosco muestra claramente **"Sin conexión"** y no registra. La contingencia es **corrección manual con motivo**. El modo offline real (guardar local y sincronizar) es una fase posterior; sus eventos se marcarían para revisión.
 
-## 8. Horarios y turnos
+## 8. Horarios y turnos (D-22 … D-32)
 
-- **RN-HOR-01** Un turno define empleado, sucursal, fecha laboral y hora local de inicio y fin. Si fin ≤ inicio, termina al día siguiente (19:00–03:00). Se guardan los instantes UTC calculados con la zona efectiva de la sucursal.
-- **RN-HOR-02** Duración válida: default entre 1 y 16 h.
-- **RN-HOR-03** **Sin turnos traslapados** por empleado (restricción en BD).
-- **RN-HOR-04** **Programación semanal** por sucursal; la semana inicia según `week_start_day` (default lunes; configurable por negocio). `BORRADOR` → `PUBLICADA`; el empleado solo ve lo publicado.
-- **RN-HOR-05** Plantillas de turno y copiar la semana anterior.
+Modelo: **Plantilla → Horario semanal → Turno concreto → (Fase 3) Jornada real.** La asistencia se compara SIEMPRE contra el turno concreto, nunca contra la plantilla.
+
+- **RN-HOR-01** **Turno concreto** = empleado + sucursal + fecha laboral + instantes reales (`starts_at`/`ends_at` en UTC) + `timezone_snapshot`. Es la **fuente de verdad** para asistencia (D-22). La API trabaja con fecha/hora local y la convierte con la zona efectiva de la sucursal (D-26).
+- **RN-HOR-02** Duración válida configurable: `shift_min_minutes` (60) y `shift_max_minutes` (960), heredables negocio → sucursal. La duración programada se calcula de los instantes (columna generada) y **no descuenta comida**.
+- **RN-HOR-03** **Sin traslapes** del mismo empleado entre turnos no cancelados, **aunque sean de sucursales distintas**; intervalos `[inicio, fin)` (07–15 y 15–23 no se traslapan). Restricción de exclusión en PostgreSQL (D-29).
+- **RN-HOR-04** **Horario semanal** por sucursal y semana (`week_start_day`): `DRAFT` → `PUBLISHED`. Publicar es una acción **explícita e irreversible** (D-24). En `DRAFT` se edita libremente según permisos y un turno se puede quitar; un turno de un horario publicado **nunca se borra**: se cancela.
+- **RN-HOR-05** **Plantillas** separadas de los turnos (D-23): ayudan a generar semanas; modificarlas **nunca** cambia turnos existentes, históricos ni publicados. **Copiar semana anterior** conserva las **horas locales** (no suma 7×24 h en UTC), valida empleados activos, sucursal activa, asignaciones, traslapes y permisos, y reporta cada turno que no pudo copiarse con su motivo.
 - **RN-HOR-06** Día sin turno = descanso, no genera falta.
-- **RN-HOR-07** Cambiar/cancelar un turno publicado requiere permiso, motivo y auditoría; si hay jornada, se recalcula. Los turnos pasados con jornada solo los modifica el administrador.
-- **RN-HOR-08** Programan: administrador y encargado **solo con permiso** `schedules.manage` en su alcance.
+- **RN-HOR-07** Un turno publicado se puede editar, reasignar, cambiar de sucursal u horario y cancelar; **todo cambio se audita** con antes/después (D-31). **Motivo obligatorio para cancelar**; la edición normal no lo exige. *(Precisa la versión anterior de esta regla, que pedía motivo para todo cambio.)*
+- **RN-HOR-08** Programan el administrador (todo el negocio) y el ENCARGADO **solo en las sucursales de su alcance**, **solo con empleados asignados a esa sucursal en esa fecha** (D-30). `schedules.manage` viene por defecto en ENCARGADO y es revocable por negocio. La excepción operativa del kiosco (D-17, `SIN_ASIGNACION_SUCURSAL`) **no aplica** a la planificación.
+- **RN-HOR-09** **Turnos nocturnos** (D-27): un solo turno (19:00 → 03:00 del día siguiente), `ends_at > starts_at` siempre; pertenecen al día en que **inician**.
+- **RN-HOR-10** **DST** (D-28): solo zonas IANA. Una hora local **inexistente** se rechaza con error explícito; una hora **ambigua** exige indicar cuál (`EARLIER`/`LATER`). Nunca se guarda otra hora en silencio.
+- **RN-HOR-11** **Zona del turno** (D-26): se guarda `timezone_snapshot`; cambiar después la zona de la sucursal no reinterpreta turnos existentes.
+- **RN-HOR-12** **Turnos históricos** (D-32): un turno **futuro** se edita normalmente. Uno **en curso** o **terminado** (y crear un turno en el pasado) exige el permiso `schedules.history.manage` (solo ADMIN por defecto) **y motivo**; queda auditado como corrección histórica. Corrección de planificación ≠ corrección de asistencia.
+- **RN-HOR-13** **Estados del turno** (D-25): solo `SCHEDULED` / `CANCELLED`. Retardo, falta, trabajando, etc. pertenecen a la asistencia.
+- **RN-HOR-14** **Concurrencia:** cada cambio envía la versión que el usuario vio; si otra persona modificó antes el turno, el horario o la plantilla, se rechaza y hay que recargar (nada se sobrescribe en silencio).
 
 ## 9. Cálculo de asistencia
 
@@ -173,6 +181,7 @@ Variables: `Hp_ini`/`Hp_fin` programados; `Hr_ini`/`Hr_fin` = primera Entrada / 
 | `pin_lockout_sec` (pausa inicial) | 10 | negocio · sucursal |
 | `pin_lockout_max_sec` (tope de pausa) | 120 (máx. 300) | negocio · sucursal |
 | `week_start_day` (1 = lunes) | 1 | negocio |
+| `shift_min_minutes` / `shift_max_minutes` | 60 / 960 | negocio · sucursal |
 
 La zona horaria **no es una política**: es un atributo del negocio (obligatorio) y de la sucursal (opcional).
 

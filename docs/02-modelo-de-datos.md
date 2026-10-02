@@ -1,7 +1,7 @@
 # 02 · Modelo de datos (PostgreSQL) — multi-negocio
 
-> **Versión 1.1 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
-> Estado de implementación: **Fases 0 y 1 implementadas** (esquemas `platform`, `auth`, `core`, `audit`; migraciones `0001`–`0006` en `apps/api/db/migrations`). Las tablas de `scheduling` y `attendance` están **diseñadas** aquí y se crean en las fases 2–3.
+> **Versión 1.2 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
+> Estado de implementación: **Fases 0, 1 y 2 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`; migraciones `0001`–`0007` en `apps/api/db/migrations`). Las tablas de `scheduling` y `attendance` están **diseñadas** aquí y se crean en las fases 2–3.
 
 ## 1. Convenciones
 
@@ -173,7 +173,7 @@ Más rangos por parámetro (`CHECK (break_allowed_min BETWEEN 0 AND 600)`, `week
 
 **Política efectiva** (`resolveEffectivePolicy`, función pura con pruebas): `plataforma → ORGANIZATION → BRANCH → EMPLOYEE`, campo por campo (`COALESCE` en orden inverso). Ejemplo: plataforma 35 · Fatboy (sin override) 35 · San Marcos 35 · Venecia 40 · empleado X (override 30) ⇒ efectivo de X = 30.
 
-Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_hours_unscheduled`, `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec`, `week_start_day` (tabla de defaults y niveles en `01 §10`).
+Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_hours_unscheduled`, `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec`, `week_start_day`, `shift_min_minutes`, `shift_max_minutes` (tabla de defaults y niveles en `01 §10`).
 
 ## 6. Esquema `audit`
 
@@ -184,16 +184,36 @@ Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_a
 - Trigger que rechaza `UPDATE`/`DELETE`/`TRUNCATE` + `REVOKE` para `app_user`.
 - **Nunca** contiene PIN, hash de PIN, contraseñas ni tokens (el servicio redacta campos sensibles y hay pruebas).
 
-## 7. Esquema `scheduling` (Fase 2 — diseño)
+## 7. Esquema `scheduling` (Fase 2 — implementado)
 
-Todas con `organization_id`, FKs compuestas y RLS.
-- **`shift_templates`**: `branch_id` (null = todo el negocio), `name`, `start_time`, `end_time`.
-- **`weekly_schedules`**: `branch_id`, `week_start`, `status` (`DRAFT`/`PUBLISHED`), `published_at/by`. `UNIQUE (organization_id, branch_id, week_start)`.
-- **`shifts`**: `schedule_id`, `employee_id`, `branch_id`, `business_date`, `start_local`, `end_local`, `starts_at`, `ends_at` (timestamptz calculados con la zona efectiva; si `end_local <= start_local`, `ends_at` cae al día siguiente), `template_id`, `status`.
+Todas con `organization_id NOT NULL`, FKs compuestas y RLS forzado.
+
+### `weekly_schedules` — horario semanal (planificación)
+`id`, `organization_id`, `branch_id`, `week_start`, `status` (`DRAFT`/`PUBLISHED`), `version` (concurrencia optimista), `published_at`, `published_by`, `created_by`. `UNIQUE (organization_id, branch_id, week_start)`, `UNIQUE (organization_id, id, branch_id)` (para la FK del turno). Trigger: un horario publicado **no vuelve** a borrador.
+
+### `shifts` — turno concreto (fuente de verdad para asistencia)
+| Columna | Notas |
+|---|---|
+| `id`, `organization_id`, `schedule_id`, `branch_id`, `employee_id` | FK `(organization_id, schedule_id, branch_id)` → horario: la sucursal del turno es la de su horario; FKs compuestas a sucursal y empleado del mismo negocio |
+| `business_date` | fecha local en que **inicia** (cuadrícula semanal) |
+| `starts_at`, `ends_at` | UTC; `CHECK (ends_at > starts_at)`, `≤ 24 h` |
+| `timezone_snapshot` | zona IANA usada al crearlo (validada) |
+| `scheduled_minutes` | **columna generada** de los instantes (sin duplicar datos; no descuenta comida) |
+| `status` | `SCHEDULED` / `CANCELLED` (+ `cancelled_at`, `cancelled_by`, `cancel_reason` obligatorio) |
+| `notes`, `source` (`MANUAL`/`COPY`/`TEMPLATE`), `source_shift_id`, `source_template_id` | origen (solo referencia) |
+| `version`, `created_by`, `updated_by`, timestamps | concurrencia optimista y trazabilidad |
 ```sql
-EXCLUDE USING gist (employee_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&) WHERE (status='SCHEDULED')
-CHECK (ends_at > starts_at)
+CONSTRAINT shift_no_overlap EXCLUDE USING gist (employee_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&)
+  WHERE (status = 'SCHEDULED')                         -- D-29, entre sucursales, [inicio, fin)
+UNIQUE (organization_id, schedule_id, source_shift_id) WHERE source_shift_id IS NOT NULL AND status = 'SCHEDULED'  -- copiar es idempotente
 ```
+Triggers: un turno **cancelado queda congelado**; **solo se borra** un turno de un horario en `DRAFT` (nunca publicado).
+
+### `schedule_templates` / `schedule_template_entries` — plantillas (D-23)
+Plantilla por sucursal (`name` único por sucursal, `is_active`, `version`) y entradas `employee_id`, `weekday` (ISO 1–7), `start_local`, `end_local` (fin ≤ inicio ⇒ día siguiente). Generar desde una plantilla **copia** valores a turnos nuevos; editarla no toca turnos.
+
+### Permisos nuevos
+`schedules.view`, `schedules.history.manage` (corregir turnos en curso/terminados, con motivo), `schedules.templates.manage`. ADMIN: todos. ENCARGADO por defecto: `schedules.view` y `schedules.manage` (siempre dentro de su alcance; revocable).
 
 ## 8. Esquema `attendance` (Fase 3 — diseño)
 

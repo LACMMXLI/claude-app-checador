@@ -52,3 +52,35 @@ export interface Employee {
   primaryBranchId: string | null;
   branchIds: string[];
 }
+
+export interface Shift {
+  id: string;
+  scheduleId: string;
+  scheduleStatus: 'DRAFT' | 'PUBLISHED' | null;
+  branchId: string;
+  employeeId: string;
+  businessDate: string;
+  startsAt: string;
+  endsAt: string;
+  timezone: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  crossesMidnight: boolean;
+  scheduledMinutes: number;
+  status: 'SCHEDULED' | 'CANCELLED';
+  cancelReason: string | null;
+  notes: string | null;
+  source: string;
+  version: number;
+}
+
+export interface Week {
+  branch: { id: string; name: string; timezone: string; isActive: boolean };
+  weekStart: string;
+  days: string[];
+  schedule: { id: string; status: 'DRAFT' | 'PUBLISHED'; version: number; publishedAt: string | null } | null;
+  employees: { id: string; employeeNumber: string; firstName: string; lastName: string; status: string; temporary: boolean }[];
+  shifts: Shift[];
+}

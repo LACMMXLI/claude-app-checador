@@ -1,4 +1,4 @@
-# 04 · Operación (Fases 0–1)
+# 04 · Operación (Fases 0–2)
 
 ## 1. Desarrollo local
 
@@ -32,10 +32,11 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
 
 8. Dar de alta usuarios: desde el panel → **Usuarios → Invitar**. El enlace se muestra una sola vez; entrégalo a la persona (aún no se envían correos).
 
-## 2.1 Antes de producción (obligatorio)
+## 2.1 Antes de producción
 
-- [ ] Docker: construir `apps/api/Dockerfile` y `apps/web/Dockerfile`, `docker compose up` con base limpia, pruebas completas y panel funcionando.
-- [x] GitHub Actions: ejecución real en verde (run #5, commit `cc1d7cb`). Mantenerlo en verde es requisito para cada despliegue.
+- Validación en el servidor (Coolify): construir `apps/api/Dockerfile` y `apps/web/Dockerfile`, `docker compose up` con base limpia, migraciones (`init`), API sana (`/health`), panel por HTTPS con cookie `__Host-sid`, persistencia y reinicios.
+- GitHub Actions en verde (lo está desde el run #5). Mantenerlo en verde es requisito para cada despliegue.
+- La migración `0007` agrega permisos de planificación a los roles `ADMIN`/`ENCARGADO` existentes y la política de duración de turnos.
 
 ## 3. Respaldos (crítico)
 
@@ -52,7 +53,7 @@ La base contiene a **todos** los negocios y su auditoría. Respaldos diarios de 
 
 ## 5. Qué NO está todavía
 
-Recuperación de contraseña por correo y envío de invitaciones por correo, kiosco visual, turnos, checadas, jornadas, incidencias, correcciones, reportes, tiempo real (ver `03-arquitectura.md §10`).
+Recuperación de contraseña por correo y envío de invitaciones por correo, kiosco visual, checadas, jornadas, incidencias, correcciones de asistencia, reportes, tiempo real (ver `03-arquitectura.md §10`).
 
 ## 6. Roles de PostgreSQL son de todo el clúster
 

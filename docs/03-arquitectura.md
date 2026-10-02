@@ -1,6 +1,6 @@
 # 03 · Arquitectura
 
-> **Versión 1.1 — CONGELADA.** Estado: **Fases 0 y 1 implementadas y probadas** (ver §10 y `04-operacion.md`). **Aún NO desplegable:** falta verificar Docker (§9). GitHub Actions ya está en verde.
+> **Versión 1.2 — CONGELADA.** Estado: **Fases 0, 1 y 2 implementadas y probadas** (ver §10). CI de GitHub Actions en verde. La validación con Docker/Coolify la realiza el dueño en su servidor (§9).
 
 ## 1. Resumen
 
@@ -15,7 +15,7 @@
 | Frontend | **Next.js 16 + React 19**, CSS propio (sin framework visual todavía); panel funcional responsive; textos por **sistema de traducciones** (es-MX). El panel reenvía `/api/*` a la API (proxy del mismo origen) | Fase 1: panel. Kiosco visual: Fase 3 |
 | Tiempo real | **SSE** | Fase 4 |
 | Excel | `exceljs` | Fase 6 |
-| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel) | 179 pruebas + 1 E2E |
+| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel) | 223 pruebas + 2 E2E |
 | CI | GitHub Actions: typecheck → build → migraciones desde cero → `check:tenancy` → pruebas → smoke | Fase 0 |
 
 **Por qué NestJS y no solo rutas API de Next.js:** módulos que crecerán (mesas, adelantos, nómina, comunicados), procesos en segundo plano con scheduler, tiempo real con estado en memoria, múltiples clientes (kiosco, panel, móvil) y el **contexto de negocio** como pieza transversal y auditable.
@@ -69,6 +69,11 @@ Lo único que ocurre antes de conocer el negocio: `auth.resolve_kiosk_token`, `a
 - Cada petición: cookie → `resolve_session` (identidad activa + negocio activo vigente) → `TenantContext` → `RbacService.loadAccess` (**sin caché**: los permisos se calculan en cada petición, así un cambio de negocio o de membresía no deja nada del anterior).
 - **Anti-CSRF:** toda petición que modifica estado exige `X-Requested-With: checador` (además de `SameSite`). La API del dispositivo (`/api/kiosk/*`) usa `Authorization: Bearer` y no cookies.
 - El panel (Next.js) es el único servicio expuesto: `/api/*` se reenvía a la API por red interna, de modo que la cookie es de primera parte.
+
+### 2.6.2 Planificación (Fase 2)
+- `SchedulingService` recibe el `AccessProfile` de la petición y aplica: alcance por sucursal (D-30), protección de turnos históricos (D-32), validación de asignación/empleado/sucursal, política de duración, DST (`common/zoned-time.ts`, basado en la base de zonas IANA de `Intl`, sin offsets fijos) y concurrencia optimista (`version`).
+- PostgreSQL impone: exclusión de traslapes, `ends_at > starts_at`, FKs compuestas turno↔horario↔sucursal↔empleado, horario publicado irreversible, cancelado congelado y prohibición de borrar turnos publicados.
+- Copiar semana / aplicar plantilla comparten un generador con *savepoint* por turno, `dryRun` y resultado detallado.
 
 ### 2.7 Procesos en segundo plano (Fase 3+)
 `core.list_active_organizations()` → cada negocio se procesa en **su propia transacción con su propio contexto**. Un error en uno no afecta a los demás; los suspendidos se omiten.
@@ -155,9 +160,7 @@ PWA en pantalla completa; **logo y nombre del negocio** y de la sucursal, campo 
 
 Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_URL=http://api:3000`. La API usa `COOKIE_SECURE=true` (por eso el panel debe servirse por HTTPS).
 
-**Criterios OBLIGATORIOS antes de considerar el sistema desplegable** (pendientes):
-1. En un entorno con Docker: construir ambos `Dockerfile`, `docker compose up` sobre base limpia, migraciones, pruebas completas, API y panel arriba.
-2. ✅ Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (run #5, commit `cc1d7cb`).
+**Validación de despliegue:** GitHub Actions en verde sobre PostgreSQL real (desde el run #5). Docker/Coolify (imágenes, red interna, HTTPS, cookies `Secure`, persistencia, reinicios) lo valida el dueño en su servidor; el repositorio mantiene listos los `Dockerfile`, `docker-compose.yml`, variables y documentación.
 
 > Estado honesto: los `Dockerfile`/`docker-compose.yml` no se han podido ejecutar (el entorno de desarrollo no tiene Docker). Sí se verificó el flujo equivalente con los artefactos compilados contra PostgreSQL real: bootstrap → migrate → `check:tenancy` → alta de Fatboy → API → panel (incluido el servidor *standalone* de Next) → E2E con Playwright. GitHub Actions: ✅ en verde desde el run #5.
 
@@ -167,7 +170,7 @@ Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_
 |---|---|---|
 | **0 · Fundaciones + multi-tenant** | PostgreSQL + migraciones, `organizations`, `branches`, identidades globales, membresías, roles y alcance por sucursal, empleados, kioscos, contexto seguro de negocio, RLS, roles sin bypass, auditoría, políticas con herencia, pruebas de aislamiento A↔B, verificación de catálogo en CI, CLI, Docker/CI | ✅ **Hecha** |
 | **1 · Identidad, sesión y administración base** | D-21; login/logout, sesión por cookie con rotación, selector y cambio de negocio, invitaciones de un solo uso, RBAC HTTP por sucursal, CRUD de sucursales/empleados/kioscos/políticas (override vs efectiva), auditoría; panel web funcional; E2E | ✅ **Hecha** (pendiente: criterios de despliegue §9) |
-| 2 · Horarios | Plantillas, programación semanal, turnos nocturnos | Pendiente |
+| **2 · Horarios y turnos** | Horario semanal DRAFT/PUBLISHED, turno concreto con zona y DST, traslapes en PostgreSQL, alcance del encargado, histórico protegido, concurrencia optimista, copiar semana, plantillas; pantalla "Horario semanal", plantillas y próximos turnos del empleado | ✅ **Hecha** |
 | 3 · Motor de asistencia | Kiosco, máquina de estados, pausas, cálculo, incidencias, corte operativo, jobs por negocio | Pendiente |
 | 4 · Tablero en vivo | SSE por negocio/sucursal | Pendiente |
 | 5 · Correcciones | Flujo + visor de auditoría | Pendiente |
