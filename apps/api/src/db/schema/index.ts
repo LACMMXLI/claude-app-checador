@@ -39,6 +39,7 @@ export const policyDefaults = platform.table('policy_defaults', {
   debounceSec: integer('debounce_sec').notNull(),
   pinMaxAttempts: integer('pin_max_attempts').notNull(),
   pinLockoutSec: integer('pin_lockout_sec').notNull(),
+  pinLockoutMaxSec: integer('pin_lockout_max_sec').notNull(),
   weekStartDay: integer('week_start_day').notNull(),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });
@@ -60,6 +61,20 @@ export const users = auth.table('users', {
   status: text('status').notNull().default('ACTIVE'),
   createdAt: tstz('created_at').notNull().defaultNow(),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const sessions = auth.table('sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tokenHash: text('token_hash').notNull(),
+  userId: uuid('user_id').notNull(),
+  organizationId: uuid('organization_id'),
+  membershipId: uuid('membership_id'),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  lastSeenAt: tstz('last_seen_at').notNull().defaultNow(),
+  expiresAt: tstz('expires_at').notNull(),
+  revokedAt: tstz('revoked_at'),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
 });
 
 export const userCredentials = auth.table('user_credentials', {
@@ -170,16 +185,33 @@ export const roleAssignmentBranches = core.table('role_assignment_branches', {
   branchId: uuid('branch_id').notNull(),
 });
 
+export const invitations = core.table('invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull(),
+  email: text('email').notNull(),
+  roleId: uuid('role_id').notNull(),
+  scope: text('scope').notNull(),
+  branchIds: uuid('branch_ids').array().notNull().default([]),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: tstz('expires_at').notNull(),
+  acceptedAt: tstz('accepted_at'),
+  acceptedUserId: uuid('accepted_user_id'),
+  revokedAt: tstz('revoked_at'),
+  createdBy: uuid('created_by'),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+});
+
 export const kioskDevices = core.table('kiosk_devices', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull(),
   branchId: uuid('branch_id').notNull(),
   name: text('name').notNull(),
-  tokenPrefix: text('token_prefix').notNull(),
-  tokenHash: text('token_hash').notNull(),
+  tokenPrefix: text('token_prefix'),
+  tokenHash: text('token_hash'),
+  tokenIssuedAt: tstz('token_issued_at'),
+  tokenRevokedAt: tstz('token_revoked_at'),
   status: text('status').notNull().default('ACTIVE'),
   lastSeenAt: tstz('last_seen_at'),
-  revokedAt: tstz('revoked_at'),
   createdAt: tstz('created_at').notNull().defaultNow(),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });
@@ -223,6 +255,7 @@ export const policyOverrides = core.table('policy_overrides', {
   debounceSec: integer('debounce_sec'),
   pinMaxAttempts: integer('pin_max_attempts'),
   pinLockoutSec: integer('pin_lockout_sec'),
+  pinLockoutMaxSec: integer('pin_lockout_max_sec'),
   weekStartDay: integer('week_start_day'),
   updatedBy: uuid('updated_by'),
   createdAt: tstz('created_at').notNull().defaultNow(),

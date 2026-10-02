@@ -1,8 +1,11 @@
 import type { Pool } from 'pg';
 import { Gate } from './common/tenancy/gate.js';
 import { TenantDb } from './common/tenancy/tenant-db.js';
+import { AuditQueryService } from './modules/audit/audit-query.service.js';
 import { AuditService } from './modules/audit/audit.service.js';
 import { AuthService } from './modules/auth/auth.service.js';
+import { InvitationsService } from './modules/auth/invitations.service.js';
+import { SessionsService } from './modules/auth/sessions.service.js';
 import { KioskDevicesService } from './modules/auth/kiosk-devices.service.js';
 import { MembershipsService } from './modules/auth/memberships.service.js';
 import { KioskIdentificationService } from './modules/auth/pin-attempts.service.js';
@@ -33,6 +36,7 @@ export function createContainer(options: ContainerOptions) {
     clock: options.clock,
     pinGenerator: options.pinGenerator,
   });
+  const auth = new AuthService(gate);
   return {
     tenantDb,
     gate,
@@ -42,9 +46,12 @@ export function createContainer(options: ContainerOptions) {
     branches: new BranchesService(tenantDb, audit),
     memberships: new MembershipsService(tenantDb, audit),
     rbac: new RbacService(tenantDb),
-    auth: new AuthService(gate),
+    auth,
+    sessions: new SessionsService(gate, auth),
+    invitations: new InvitationsService(tenantDb, gate, audit),
+    auditQuery: new AuditQueryService(tenantDb),
     kiosks: new KioskDevicesService(tenantDb, gate, audit),
-    kioskIdentification: new KioskIdentificationService(tenantDb, employees, policies, options.clock),
+    kioskIdentification: new KioskIdentificationService(tenantDb, employees, policies, audit, options.clock),
   };
 }
 export type Container = ReturnType<typeof createContainer>;

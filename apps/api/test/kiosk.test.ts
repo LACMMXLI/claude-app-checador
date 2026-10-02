@@ -1,22 +1,25 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { lockoutRemainingSec } from '../src/modules/auth/pin-attempts.service.js';
+import { pinPauseDurationSec, pinPauseRemainingSec } from '../src/modules/auth/pin-attempts.service.js';
 import { parseKioskToken } from '../src/modules/auth/kiosk-devices.service.js';
 import { buildWorld, openPools, seedOrganization, type SeededOrg } from './helpers/world.js';
 
-describe('bloqueo por intentos de PIN (puro)', () => {
-  const policy = { pinMaxAttempts: 5, pinLockoutSec: 60 };
+describe('D-21 · pausa por intentos de PIN (puro)', () => {
+  const policy = { pinMaxAttempts: 5, pinLockoutSec: 10, pinLockoutMaxSec: 120 };
   const t0 = new Date('2030-01-01T10:00:00Z');
   const at = (sec: number) => new Date(t0.getTime() + sec * 1000);
-  it('no bloquea antes del umbral; bloquea al llegar a N fallos y retrocede exponencialmente (tope 1 h)', () => {
-    expect(lockoutRemainingSec(4, t0, policy, t0)).toBe(0);
-    expect(lockoutRemainingSec(5, t0, policy, at(10))).toBe(50);
-    expect(lockoutRemainingSec(5, t0, policy, at(61))).toBe(0);
-    expect(lockoutRemainingSec(7, t0, policy, t0)).toBe(0);      // entre múltiplos se permiten intentos
-    expect(lockoutRemainingSec(10, t0, policy, t0)).toBe(120);   // segundo bloqueo: el doble
-    expect(lockoutRemainingSec(15, t0, policy, t0)).toBe(240);
-    expect(lockoutRemainingSec(500, t0, policy, t0)).toBe(3600); // tope
-    expect(lockoutRemainingSec(0, null, policy, t0)).toBe(0);
+  it('5 fallos → 10 s; luego progresivo (20, 40, 80) con tope global de 120 s; nunca 1 hora', () => {
+    expect([1, 2, 3, 4].map((n) => pinPauseDurationSec(n, policy))).toEqual([0, 0, 0, 0]);
+    expect([5, 6, 7, 8, 9, 10, 50, 10_000].map((n) => pinPauseDurationSec(n, policy))).toEqual([10, 20, 40, 80, 120, 120, 120, 120]);
+    expect(pinPauseRemainingSec(5, t0, policy, at(3))).toBe(7);
+    expect(pinPauseRemainingSec(5, t0, policy, at(10))).toBe(0);
+    expect(pinPauseRemainingSec(9, t0, policy, at(119))).toBe(1);
+    expect(pinPauseRemainingSec(0, null, policy, t0)).toBe(0);
+  });
+
+  it('los límites son configurables y el tope manda aunque la base sea mayor', () => {
+    expect(pinPauseDurationSec(3, { pinMaxAttempts: 3, pinLockoutSec: 5, pinLockoutMaxSec: 60 })).toBe(5);
+    expect(pinPauseDurationSec(3, { pinMaxAttempts: 3, pinLockoutSec: 90, pinLockoutMaxSec: 60 })).toBe(60);
   });
 });
 
@@ -86,7 +89,7 @@ describe('emparejamiento y token de kiosco', () => {
     await world.kiosks.revoke(A.adminCtx, k.deviceId, 'Se perdió la tablet');
     await expect(world.kiosks.authenticate(k.token)).rejects.toMatchObject({ code: 'KIOSK_TOKEN_INVALID' });
     const audit = (await pools.platform.query(`SELECT action, reason FROM audit.audit_log WHERE entity_id = $1 ORDER BY id`, [k.deviceId])).rows.map((r) => r.action);
-    expect(audit).toEqual(['kiosk.paired', 'kiosk.revoked']);
+    expect(audit).toEqual(['kiosk.paired', 'kiosk.token_revoked']);
 
     await world.platformAdmin.setOrganizationStatus(A.slug, 'SUSPENDED');
     await expect(world.kiosks.authenticate(A.kioskToken)).rejects.toMatchObject({ code: 'KIOSK_TOKEN_INVALID' });
@@ -107,46 +110,69 @@ describe('emparejamiento y token de kiosco', () => {
 describe('protección contra intentos masivos de PIN', () => {
   const fail = (org: SeededOrg, deviceId?: string) => world.kioskIdentification.identify(kioskCtx(org, deviceId), org.branchA, '000001').catch((e) => e);
 
-  it('5 fallos ⇒ bloqueo (incluso con el PIN correcto); se libera al pasar el tiempo; un acierto reinicia; el bloqueo escala', async () => {
-    const code = await world.kiosks.createPairingCode(A.adminCtx, A.branchA);
-    const dev = await world.kiosks.redeem(code.code, 'Tablet de pruebas de bloqueo');
+  const after = (r: unknown) => (r as { details: { retryAfterSec: number } }).details.retryAfterSec;
+
+  it('5 fallos → pausa de 10 s (incluso para el PIN correcto); se libera sola; progresiva y con tope de 120 s', async () => {
+    const dev = await world.kiosks.redeem((await world.kiosks.createPairingCode(A.adminCtx, A.branchA)).code, 'Tablet de pruebas de pausa');
     const ctx = kioskCtx(A, dev.deviceId);
     clockNow = new Date('2030-06-01T12:00:00Z');
 
     for (let i = 0; i < 5; i += 1) expect((await fail(A, dev.deviceId)).code).toBe('INVALID_PIN');
-    const locked = await world.kioskIdentification.identify(ctx, A.branchA, A.employeePin).catch((e) => e);
-    expect(locked).toMatchObject({ code: 'PIN_LOCKED' });
-    expect(locked.details.retryAfterSec).toBe(60);
+    const paused = await world.kioskIdentification.identify(ctx, A.branchA, A.employeePin).catch((e) => e);
+    expect(paused).toMatchObject({ code: 'PIN_PAUSED', details: { retryAfterSec: 10 } });
 
-    clockNow = new Date(clockNow.getTime() + 30_000);
-    expect(((await fail(A, dev.deviceId)) as { details: { retryAfterSec: number } }).details.retryAfterSec).toBe(30);
+    clockNow = new Date(clockNow.getTime() + 4_000);
+    expect(after(await fail(A, dev.deviceId))).toBe(6); // durante la pausa no se evalúan PIN
 
-    clockNow = new Date(clockNow.getTime() + 31_000); // pasó el minuto
-    expect((await world.kioskIdentification.identify(ctx, A.branchA, A.employeePin)).id).toBe(A.employeeId); // acierto: reinicia
-
-    for (let i = 0; i < 5; i += 1) await fail(A, dev.deviceId); // 5 nuevos fallos ⇒ vuelve a 60 s (reinició)
-    expect(((await fail(A, dev.deviceId)) as { details: { retryAfterSec: number } }).details.retryAfterSec).toBe(60);
-    clockNow = new Date(clockNow.getTime() + 61_000);
-    for (let i = 0; i < 5; i += 1) await fail(A, dev.deviceId); // sigue sin acertar: 10 fallos consecutivos ⇒ 120 s
-    expect(((await fail(A, dev.deviceId)) as { details: { retryAfterSec: number } }).details.retryAfterSec).toBe(120);
+    // fallos que siguen: 20 s, 40 s, 80 s, 120 s (tope), 120 s…
+    const expected = [20, 40, 80, 120, 120];
+    for (const pause of expected) {
+      clockNow = new Date(clockNow.getTime() + 121_000);
+      expect((await fail(A, dev.deviceId)).code).toBe('INVALID_PIN');
+      expect(after(await fail(A, dev.deviceId))).toBe(pause);
+    }
   });
 
-  it('el bloqueo es por kiosco: otro dispositivo (del mismo negocio) sigue operando', async () => {
+  it('un acierto reinicia el contador del dispositivo', async () => {
+    const dev = await world.kiosks.redeem((await world.kiosks.createPairingCode(A.adminCtx, A.branchA)).code, 'Tablet reinicio');
+    clockNow = new Date('2030-06-02T12:00:00Z');
+    for (let i = 0; i < 5; i += 1) await fail(A, dev.deviceId);
+    clockNow = new Date(clockNow.getTime() + 11_000);
+    expect((await world.kioskIdentification.identify(kioskCtx(A, dev.deviceId), A.branchA, A.employeePin)).id).toBe(A.employeeId);
+    for (let i = 0; i < 4; i += 1) expect((await fail(A, dev.deviceId)).code).toBe('INVALID_PIN'); // vuelve a tener 4 intentos libres
+    expect((await fail(A, dev.deviceId)).code).toBe('INVALID_PIN');
+    expect(after(await fail(A, dev.deviceId))).toBe(10); // y la pausa vuelve a empezar en 10 s
+  });
+
+  it('la pausa es por dispositivo: otro kiosco del mismo negocio sigue operando', async () => {
     const dev1 = await world.kiosks.redeem((await world.kiosks.createPairingCode(A.adminCtx, A.branchA)).code, 'K1');
     const dev2 = await world.kiosks.redeem((await world.kiosks.createPairingCode(A.adminCtx, A.branchA)).code, 'K2');
     for (let i = 0; i < 5; i += 1) await fail(A, dev1.deviceId);
-    await expect(world.kioskIdentification.identify(kioskCtx(A, dev1.deviceId), A.branchA, A.employeePin)).rejects.toMatchObject({ code: 'PIN_LOCKED' });
+    await expect(world.kioskIdentification.identify(kioskCtx(A, dev1.deviceId), A.branchA, A.employeePin)).rejects.toMatchObject({ code: 'PIN_PAUSED' });
     await expect(world.kioskIdentification.identify(kioskCtx(A, dev2.deviceId), A.branchA, A.employeePin)).resolves.toMatchObject({ id: A.employeeId });
   });
 
-  it('los umbrales salen de la política jerárquica (configurable por negocio/sucursal)', async () => {
-    await world.policies.setOverride(B.adminCtx, 'BRANCH', B.branchA, { pinMaxAttempts: 2, pinLockoutSec: 300 });
+  it('cada pausa queda en la auditoría como evento de seguridad (sin PIN)', async () => {
+    const rows = (await pools.platform.query(
+      `SELECT * FROM audit.audit_log WHERE organization_id = $1 AND action = 'security.pin_pause_started' ORDER BY id`, [A.organizationId])).rows;
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]).toMatchObject({ actor_type: 'KIOSK', entity_type: 'kiosk_device', branch_id: A.branchA });
+    expect(rows[0].after).toEqual({ consecutiveFailures: 5, pauseSec: 10 });
+    expect(JSON.stringify(rows)).not.toMatch(/000001/);
+  });
+
+  it('los límites salen de la política jerárquica (negocio/sucursal) y PostgreSQL impide topes largos', async () => {
+    await world.policies.setOverride(B.adminCtx, 'BRANCH', B.branchA, { pinMaxAttempts: 2, pinLockoutSec: 30, pinLockoutMaxSec: 45 });
     const dev = await world.kiosks.redeem((await world.kiosks.createPairingCode(B.adminCtx, B.branchA)).code, 'KB');
     clockNow = new Date('2030-07-01T00:00:00Z');
     await fail(B, dev.deviceId);
     await fail(B, dev.deviceId);
-    const err = await world.kioskIdentification.identify(kioskCtx(B, dev.deviceId), B.branchA, B.employeePin).catch((e) => e);
-    expect(err).toMatchObject({ code: 'PIN_LOCKED', details: { retryAfterSec: 300 } });
+    expect(await world.kioskIdentification.identify(kioskCtx(B, dev.deviceId), B.branchA, B.employeePin).catch((e) => e)).toMatchObject({ code: 'PIN_PAUSED', details: { retryAfterSec: 30 } });
+    clockNow = new Date(clockNow.getTime() + 31_000);
+    await fail(B, dev.deviceId);
+    expect(after(await fail(B, dev.deviceId))).toBe(45); // 60 s calculados, tope 45
+    await expect(world.policies.setOverride(B.adminCtx, 'BRANCH', B.branchA, { pinLockoutMaxSec: 3600 })).rejects.toMatchObject({ code: 'POLICY_VALUE_INVALID' });
+    await expect(pools.platform.query(`UPDATE platform.policy_defaults SET pin_lockout_max_sec = 3600`)).rejects.toMatchObject({ code: '23514' });
   });
 
   it('todo intento queda registrado SIN guardar el PIN intentado; el error no revela si el PIN existe', async () => {

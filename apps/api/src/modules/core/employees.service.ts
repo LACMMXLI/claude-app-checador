@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, gte } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 import { DomainError, isPgError } from '../../common/errors.js';
 import { addDays, effectiveTimezone, localDate } from '../../common/time.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
@@ -292,6 +292,73 @@ export class EmployeesService {
         if (isPgError(error, '23P01')) throw new DomainError('PRIMARY_ASSIGNMENT_OVERLAP');
         throw error;
       }
+    });
+  }
+
+  /** Asignaciones vigentes hoy (fecha UTC) de un conjunto de empleados. */
+  private async currentAssignments(tx: Tx, employeeIds: string[]) {
+    if (employeeIds.length === 0) return [];
+    const today = localDate(this.clock(), 'UTC');
+    return tx
+      .select()
+      .from(employeeBranchAssignments)
+      .where(
+        and(
+          inArray(employeeBranchAssignments.employeeId, employeeIds),
+          lte(employeeBranchAssignments.validFrom, today),
+          or(isNull(employeeBranchAssignments.validTo), gte(employeeBranchAssignments.validTo, today)),
+        ),
+      );
+  }
+
+  /** Sucursal principal vigente y sucursales vigentes (principal + temporales) de un empleado. */
+  async branchesOf(tx: Tx, employeeId: string): Promise<{ primaryBranchId: string | null; branchIds: string[] }> {
+    const rows = await this.currentAssignments(tx, [employeeId]);
+    return {
+      primaryBranchId: rows.find((r) => r.kind === 'PRIMARY')?.branchId ?? null,
+      branchIds: [...new Set(rows.map((r) => r.branchId))],
+    };
+  }
+
+  /**
+   * Lista empleados. Con alcance por sucursales, solo los que tienen una asignación vigente en alguna
+   * de ellas (un encargado nunca ve empleados ajenos a su alcance).
+   */
+  async list(ctx: TenantContext, scope: 'ALL' | ReadonlySet<string>, filter: { status?: 'ACTIVE' | 'INACTIVE'; branchId?: string } = {}) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const all = await tx
+        .select()
+        .from(employees)
+        .where(filter.status ? eq(employees.status, filter.status) : undefined)
+        .orderBy(asc(employees.lastName), asc(employees.firstName));
+      const assignments = await this.currentAssignments(tx, all.map((e) => e.id));
+      const byEmployee = new Map<string, typeof assignments>();
+      for (const a of assignments) byEmployee.set(a.employeeId, [...(byEmployee.get(a.employeeId) ?? []), a]);
+      return all
+        .map((e) => {
+          const mine = byEmployee.get(e.id) ?? [];
+          return {
+            ...toView(e),
+            primaryBranchId: mine.find((a) => a.kind === 'PRIMARY')?.branchId ?? null,
+            branchIds: [...new Set(mine.map((a) => a.branchId))],
+          };
+        })
+        .filter((e) => scope === 'ALL' || e.branchIds.some((b) => scope.has(b)))
+        .filter((e) => !filter.branchId || e.branchIds.includes(filter.branchId));
+    });
+  }
+
+  async get(ctx: TenantContext, employeeId: string) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const [e] = await tx.select().from(employees).where(eq(employees.id, employeeId));
+      if (!e) throw new DomainError('EMPLOYEE_NOT_FOUND');
+      const history = await tx
+        .select()
+        .from(employeeBranchAssignments)
+        .where(eq(employeeBranchAssignments.employeeId, employeeId))
+        .orderBy(asc(employeeBranchAssignments.validFrom));
+      const current = await this.branchesOf(tx, employeeId);
+      return { ...toView(e), ...current, hasPin: e.pinHash !== null, assignments: history };
     });
   }
 

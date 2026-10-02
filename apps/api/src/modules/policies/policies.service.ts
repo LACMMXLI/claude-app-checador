@@ -6,6 +6,7 @@ import { employees, branches, policyDefaults, policyOverrides } from '../../db/s
 import type { AuditService } from '../audit/audit.service.js';
 import {
   POLICY_KEYS,
+  POLICY_PARAMS,
   type EffectivePolicy,
   type PolicyLayer,
   type PolicyScope,
@@ -65,6 +66,45 @@ export class PoliciesService {
     });
     resolved.policy.operationalCutoff = normalizeTime(resolved.policy.operationalCutoff);
     return resolved;
+  }
+
+  /** Override GUARDADO de un nivel (solo los parámetros sobrescritos; el resto hereda). */
+  async getOverride(ctx: TenantContext, scope: PolicyScope, targetId: string | null): Promise<PolicyLayer> {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const rows = await tx.select().from(policyOverrides);
+      const row = rows.find((r) =>
+        scope === 'ORGANIZATION' ? r.scope === 'ORGANIZATION' : scope === 'BRANCH' ? r.scope === 'BRANCH' && r.branchId === targetId : r.scope === 'EMPLOYEE' && r.employeeId === targetId,
+      );
+      const layer = layerFromRow(row) ?? {};
+      return Object.fromEntries(Object.entries(layer).filter(([, v]) => v !== null)) as PolicyLayer;
+    });
+  }
+
+  /**
+   * Explica la política: por parámetro, el valor de cada nivel (plataforma, negocio, sucursal, empleado),
+   * el valor EFECTIVO y su ORIGEN. Ej.: breakAllowedMin = 30 · origen EMPLOYEE.
+   */
+  async explain(ctx: TenantContext, target: { branchId?: string; employeeId?: string } = {}) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const platform = await this.platformDefaults(tx);
+      const rows = await tx.select().from(policyOverrides);
+      const org = layerFromRow(rows.find((r) => r.scope === 'ORGANIZATION'));
+      const branch = target.branchId ? layerFromRow(rows.find((r) => r.scope === 'BRANCH' && r.branchId === target.branchId)) : undefined;
+      const employee = target.employeeId ? layerFromRow(rows.find((r) => r.scope === 'EMPLOYEE' && r.employeeId === target.employeeId)) : undefined;
+      const { policy, sources } = resolvePolicy(platform, { organization: org, branch, employee });
+      return POLICY_KEYS.map((key) => ({
+        key,
+        effective: key === 'operationalCutoff' ? normalizeTime(String(policy[key])) : policy[key],
+        source: sources[key],
+        levels: {
+          PLATFORM: platform[key],
+          ORGANIZATION: org?.[key] ?? null,
+          BRANCH: target.branchId ? (branch?.[key] ?? null) : undefined,
+          EMPLOYEE: target.employeeId ? (employee?.[key] ?? null) : undefined,
+        },
+        allowedScopes: POLICY_PARAMS[key].scopes,
+      }));
+    });
   }
 
   /**

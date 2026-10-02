@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { DomainError, isPgError } from '../../common/errors.js';
 import { effectiveTimezone, isValidTimezone } from '../../common/time.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
@@ -57,6 +57,29 @@ export class BranchesService {
         reason,
       });
       return after!;
+    });
+  }
+
+  /** Lista las sucursales del negocio; `scope` limita a las del alcance del usuario. Incluye la zona efectiva. */
+  async list(ctx: TenantContext, scope: 'ALL' | ReadonlySet<string>) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const [org] = await tx.select().from(organizations).where(eq(organizations.id, ctx.organizationId));
+      if (scope !== 'ALL' && scope.size === 0) return [];
+      const rows = await tx
+        .select()
+        .from(branches)
+        .where(scope === 'ALL' ? undefined : inArray(branches.id, [...scope]))
+        .orderBy(asc(branches.name));
+      return rows.map((b) => ({ ...b, effectiveTimezone: effectiveTimezone(b.timezone, org!.timezone) }));
+    });
+  }
+
+  async get(ctx: TenantContext, branchId: string) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const [branch] = await tx.select().from(branches).where(eq(branches.id, branchId));
+      if (!branch) throw new DomainError('BRANCH_NOT_FOUND');
+      const [org] = await tx.select().from(organizations).where(eq(organizations.id, ctx.organizationId));
+      return { ...branch, effectiveTimezone: effectiveTimezone(branch.timezone, org!.timezone) };
     });
   }
 

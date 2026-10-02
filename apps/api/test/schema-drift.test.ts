@@ -9,8 +9,8 @@ afterAll(() => pools.close());
 describe('esquema Drizzle ↔ PostgreSQL migrado (sin deriva)', () => {
   const tables = Object.values(schema).filter((v) => typeof v === 'object' && v !== null && Symbol.for('drizzle:IsDrizzleTable') in (v as object));
 
-  it('hay definiciones para todas las tablas de la Fase 0', () => {
-    expect(tables.length).toBe(19);
+  it('hay definiciones para todas las tablas de la Fases 0–1', () => {
+    expect(tables.length).toBe(21);
   });
 
   it.each(tables.map((t) => {

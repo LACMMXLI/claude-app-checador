@@ -108,6 +108,9 @@ export async function seedOrganization(world: World, opts: { timezone?: string; 
   // Segundo código sin canjear (para poblar kiosk_pairing_codes con una fila vigente)
   await world.kiosks.createPairingCode(adminCtx, branchB);
 
+  // Invitación pendiente (el token no se conserva: solo su hash en BD)
+  await world.invitations.invite(adminCtx, { email: `invitado-${slug}@ejemplo.com`, roleId: provisioned.encargadoRoleId, scope: { type: 'BRANCHES', branchIds: [branchA] } });
+
   // Overrides de política en los tres niveles
   await world.policies.setOverride(adminCtx, 'ORGANIZATION', null, { breakAllowedMin: 35, weekStartDay: 1 });
   await world.policies.setOverride(adminCtx, 'BRANCH', branchB, { breakAllowedMin: 40 });

@@ -18,9 +18,14 @@ import {
 } from '../../db/schema/index.js';
 import { hashPassword } from '../auth/password.js';
 
-/** Permisos del rol de sistema ENCARGADO (el ADMIN recibe todo el catálogo). */
+/**
+ * Permisos del rol de sistema ENCARGADO (el ADMIN recibe todo el catálogo). Siempre limitados por el
+ * ALCANCE de sucursales de la asignación. Cada negocio puede ajustarlos.
+ */
 export const ENCARGADO_PERMISSIONS = [
   'employees.view',
+  'employees.manage',
+  'employees.pin.manage',
   'attendance.view',
   'attendance.correction.apply',
   'incidents.resolve',

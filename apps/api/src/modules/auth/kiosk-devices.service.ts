@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { DomainError } from '../../common/errors.js';
 import type { Gate } from '../../common/tenancy/gate.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
-import type { TenantDb } from '../../common/tenancy/tenant-db.js';
+import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
 import { branches, kioskDevices, kioskPairingCodes } from '../../db/schema/index.js';
 import type { AuditService } from '../audit/audit.service.js';
 
@@ -14,6 +14,13 @@ const PREFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012
 
 const randomString = (alphabet: string, length: number): string =>
   Array.from({ length }, () => alphabet[randomInt(0, alphabet.length)]).join('');
+
+/** Token nuevo: prefijo público + secreto de 256 bits. En BD solo va el SHA-256 del secreto. */
+function newToken() {
+  const prefix = randomString(PREFIX_ALPHABET, 12);
+  const secret = randomBytes(32).toString('base64url');
+  return { prefix, hash: sha256(secret), token: `kt_${prefix}.${secret}` };
+}
 
 /** Formato del token del kiosco: `kt_<prefijo público de 12>.<secreto>`. */
 export function parseKioskToken(token: string): { prefix: string; secret: string } | null {
@@ -67,11 +74,10 @@ export class KioskDevicesService {
    * conocido: la función-puerta valida el código, crea el dispositivo y audita atómicamente.
    */
   async redeem(code: string, deviceName: string): Promise<{ token: string } & KioskIdentity> {
-    const prefix = randomString(PREFIX_ALPHABET, 12);
-    const secret = randomBytes(32).toString('base64url');
-    const redeemed = await this.gate.redeemPairingCode(sha256(code.trim().toUpperCase()), deviceName, prefix, sha256(secret));
+    const t = newToken();
+    const redeemed = await this.gate.redeemPairingCode(sha256(code.trim().toUpperCase()), deviceName, t.prefix, t.hash);
     if (!redeemed) throw new DomainError('PAIRING_CODE_INVALID');
-    return { token: `kt_${prefix}.${secret}`, ...redeemed };
+    return { token: t.token, ...redeemed };
   }
 
   /** Valida el token de un kiosco ⇒ identidad (device, negocio, sucursal). Es el origen del contexto del kiosco. */
@@ -93,22 +99,108 @@ export class KioskDevicesService {
     return { organizationId: identity.organizationId, actor: { type: 'KIOSK', deviceId: identity.deviceId }, ...extra };
   }
 
-  async revoke(ctx: TenantContext, deviceId: string, reason?: string): Promise<void> {
-    await this.tenantDb.run(ctx, async (tx) => {
-      const [device] = await tx.select().from(kioskDevices).where(eq(kioskDevices.id, deviceId));
-      if (!device) throw new DomainError('KIOSK_NOT_FOUND');
-      if (device.status === 'REVOKED') return;
-      await tx.update(kioskDevices).set({ status: 'REVOKED', revokedAt: new Date() }).where(eq(kioskDevices.id, deviceId));
-      await this.audit.record(tx, ctx, {
-        action: 'kiosk.revoked',
-        entityType: 'kiosk_device',
-        entityId: deviceId,
-        branchId: device.branchId,
-        before: { status: 'ACTIVE' },
-        after: { status: 'REVOKED' },
-        reason,
-      });
+  /** Vista segura de un kiosco: nunca incluye el hash ni el prefijo del token. */
+  private view(d: typeof kioskDevices.$inferSelect) {
+    return {
+      id: d.id,
+      name: d.name,
+      branchId: d.branchId,
+      status: d.status,
+      hasToken: d.tokenHash !== null,
+      tokenIssuedAt: d.tokenIssuedAt,
+      tokenRevokedAt: d.tokenRevokedAt,
+      lastSeenAt: d.lastSeenAt,
+      createdAt: d.createdAt,
+    };
+  }
+
+  private async mustGet(tx: Tx, deviceId: string) {
+    const [device] = await tx.select().from(kioskDevices).where(eq(kioskDevices.id, deviceId));
+    if (!device) throw new DomainError('KIOSK_NOT_FOUND');
+    return device;
+  }
+
+  private async assertBranch(tx: Tx, branchId: string) {
+    const [branch] = await tx.select().from(branches).where(eq(branches.id, branchId));
+    if (!branch) throw new DomainError('BRANCH_NOT_FOUND');
+    if (!branch.isActive) throw new DomainError('BRANCH_INACTIVE');
+  }
+
+  list(ctx: TenantContext) {
+    return this.tenantDb.run(ctx, async (tx) => (await tx.select().from(kioskDevices).orderBy(kioskDevices.name)).map((d) => this.view(d)));
+  }
+
+  get(ctx: TenantContext, deviceId: string) {
+    return this.tenantDb.run(ctx, async (tx) => this.view(await this.mustGet(tx, deviceId)));
+  }
+
+  /** Crea el dispositivo ligado a una sucursal y emite su token (el token completo se muestra UNA vez). */
+  async create(ctx: TenantContext, input: { name: string; branchId: string }) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      await this.assertBranch(tx, input.branchId);
+      const t = newToken();
+      const [device] = await tx
+        .insert(kioskDevices)
+        .values({ organizationId: ctx.organizationId, branchId: input.branchId, name: input.name, tokenPrefix: t.prefix, tokenHash: t.hash, tokenIssuedAt: new Date() })
+        .returning();
+      await this.audit.record(tx, ctx, { action: 'kiosk.created', entityType: 'kiosk_device', entityId: device!.id, branchId: input.branchId, after: this.view(device!) });
+      return { device: this.view(device!), token: t.token };
     });
+  }
+
+  /** Regenera el token: el anterior deja de funcionar en ese mismo instante. */
+  async regenerateToken(ctx: TenantContext, deviceId: string, reason?: string) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const before = await this.mustGet(tx, deviceId);
+      const t = newToken();
+      const [after] = await tx
+        .update(kioskDevices)
+        .set({ tokenPrefix: t.prefix, tokenHash: t.hash, tokenIssuedAt: new Date(), tokenRevokedAt: null })
+        .where(eq(kioskDevices.id, deviceId))
+        .returning();
+      await this.audit.record(tx, ctx, { action: 'kiosk.token_regenerated', entityType: 'kiosk_device', entityId: deviceId, branchId: before.branchId, before: this.view(before), after: this.view(after!), reason });
+      return { device: this.view(after!), token: t.token };
+    });
+  }
+
+  /** Revoca el token (el dispositivo queda sin credencial hasta regenerarla). */
+  async revokeToken(ctx: TenantContext, deviceId: string, reason?: string) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const before = await this.mustGet(tx, deviceId);
+      const [after] = await tx
+        .update(kioskDevices)
+        .set({ tokenPrefix: null, tokenHash: null, tokenIssuedAt: null, tokenRevokedAt: new Date() })
+        .where(eq(kioskDevices.id, deviceId))
+        .returning();
+      await this.audit.record(tx, ctx, { action: 'kiosk.token_revoked', entityType: 'kiosk_device', entityId: deviceId, branchId: before.branchId, before: this.view(before), after: this.view(after!), reason });
+      return this.view(after!);
+    });
+  }
+
+  /** Activa/desactiva el dispositivo (inactivo: su token no autentica, aunque exista). */
+  async setStatus(ctx: TenantContext, deviceId: string, status: 'ACTIVE' | 'INACTIVE', reason?: string) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const before = await this.mustGet(tx, deviceId);
+      const [after] = await tx.update(kioskDevices).set({ status }).where(eq(kioskDevices.id, deviceId)).returning();
+      await this.audit.record(tx, ctx, { action: 'kiosk.status_changed', entityType: 'kiosk_device', entityId: deviceId, branchId: before.branchId, before: { status: before.status }, after: { status }, reason });
+      return this.view(after!);
+    });
+  }
+
+  /** Renombrar o reasignar a otra sucursal DEL MISMO negocio (FK compuesta). */
+  async update(ctx: TenantContext, deviceId: string, patch: { name?: string; branchId?: string }, reason?: string) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const before = await this.mustGet(tx, deviceId);
+      if (patch.branchId) await this.assertBranch(tx, patch.branchId);
+      const [after] = await tx.update(kioskDevices).set(patch).where(eq(kioskDevices.id, deviceId)).returning();
+      await this.audit.record(tx, ctx, { action: 'kiosk.updated', entityType: 'kiosk_device', entityId: deviceId, branchId: after!.branchId, before: this.view(before), after: this.view(after!), reason });
+      return this.view(after!);
+    });
+  }
+
+  /** Compatibilidad Fase 0: revocar = quitar el token. */
+  revoke(ctx: TenantContext, deviceId: string, reason?: string) {
+    return this.revokeToken(ctx, deviceId, reason);
   }
 
   async touch(ctx: TenantContext, deviceId: string): Promise<void> {

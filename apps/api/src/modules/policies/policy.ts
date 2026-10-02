@@ -35,7 +35,8 @@ export const POLICY_PARAMS = {
   maxHoursUnscheduled: { schema: int(1, 48), scopes: UP_TO_BRANCH },
   debounceSec: { schema: int(0, 3600), scopes: UP_TO_BRANCH },
   pinMaxAttempts: { schema: int(1, 20), scopes: UP_TO_BRANCH },
-  pinLockoutSec: { schema: int(1, 3600), scopes: UP_TO_BRANCH },
+  pinLockoutSec: { schema: int(1, 300), scopes: UP_TO_BRANCH },
+  pinLockoutMaxSec: { schema: int(1, 300), scopes: UP_TO_BRANCH },
   weekStartDay: { schema: int(1, 7), scopes: ORG_ONLY },
 } as const satisfies Record<string, ParamDef>;
 
@@ -56,6 +57,7 @@ export interface EffectivePolicy {
   debounceSec: number;
   pinMaxAttempts: number;
   pinLockoutSec: number;
+  pinLockoutMaxSec: number;
   weekStartDay: number;
 }
 

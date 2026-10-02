@@ -36,6 +36,33 @@ export class AccessProfile {
     return set;
   }
 
+  /** Todas las sucursales que la membresía puede ver por cualquier permiso: 'ALL' o la lista. */
+  visibleBranches(): 'ALL' | ReadonlySet<string> {
+    const set = new Set<string>();
+    for (const g of this.grants) {
+      if (g.permissions.size === 0) continue;
+      if (g.branchIds === null) return 'ALL';
+      g.branchIds.forEach((b) => set.add(b));
+    }
+    return set;
+  }
+
+  /** Resumen serializable para el panel (qué puede hacer y dónde). */
+  summary(): Record<string, 'ALL' | string[]> {
+    const out: Record<string, 'ALL' | string[]> = {};
+    const all = new Set(this.grants.flatMap((g) => [...g.permissions]));
+    for (const p of [...all].sort()) {
+      const b = this.branchesFor(p);
+      out[p] = b === 'ALL' ? 'ALL' : [...b].sort();
+    }
+    return out;
+  }
+
+  /** ¿Puede ejercer el permiso en TODAS las sucursales indicadas? */
+  canAll(permission: string, branchIds: readonly string[]): boolean {
+    return branchIds.length > 0 && branchIds.every((b) => this.can(permission, b));
+  }
+
   assert(permission: string, branchId?: string): void {
     if (!this.can(permission, branchId)) throw new DomainError('FORBIDDEN', { permission });
   }

@@ -39,7 +39,7 @@ describe('aislamiento entre negocios — cobertura', () => {
     expect(tables).toEqual(
       expect.arrayContaining([
         'audit.audit_log', 'core.branches', 'core.employee_branch_assignments', 'core.employees', 'core.kiosk_devices',
-        'core.kiosk_pairing_codes', 'core.organization_memberships', 'core.pin_attempts', 'core.policy_overrides',
+        'core.invitations', 'core.kiosk_pairing_codes', 'core.organization_memberships', 'core.pin_attempts', 'core.policy_overrides',
         'core.role_assignment_branches', 'core.role_assignments', 'core.role_permissions', 'core.roles',
       ]),
     );
@@ -53,7 +53,7 @@ describe('aislamiento entre negocios — cobertura', () => {
 });
 
 describe('aislamiento negocio A ↔ negocio B — LECTURA y ESCRITURA en cada tabla', () => {
-  it.each(['audit.audit_log', 'core.branches', 'core.employee_branch_assignments', 'core.employees', 'core.kiosk_devices',
+  it.each(['audit.audit_log', 'core.branches', 'core.employee_branch_assignments', 'core.employees', 'core.invitations', 'core.kiosk_devices',
     'core.kiosk_pairing_codes', 'core.organization_memberships', 'core.pin_attempts', 'core.policy_overrides',
     'core.role_assignment_branches', 'core.role_assignments', 'core.role_permissions', 'core.roles'])('%s', async (table) => {
     expect(tables).toContain(table);
@@ -183,7 +183,7 @@ describe('aislamiento — integridad referencial entre negocios (FKs compuestas)
 
   it('un kiosco, una política o una membresía no pueden referenciar datos de otro negocio', async () => {
     expect((await insertAs(
-      `INSERT INTO core.kiosk_devices (organization_id, branch_id, name, token_prefix, token_hash) VALUES ($1, $2, 'x', 'abcdefghijkl', repeat('a', 64))`,
+      `INSERT INTO core.kiosk_devices (organization_id, branch_id, name, token_prefix, token_hash, token_issued_at) VALUES ($1, $2, 'x', 'abcdefghijkl', repeat('a', 64), now())`,
       [A.organizationId, B.branchA]))?.code).toBe('23503');
     expect((await insertAs(
       `INSERT INTO core.policy_overrides (organization_id, scope, employee_id, break_allowed_min) VALUES ($1, 'EMPLOYEE', $2, 20)`,

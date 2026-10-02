@@ -7,6 +7,7 @@ import {
   organizationMemberships,
   roleAssignmentBranches,
   roleAssignments,
+  rolePermissions,
   roles,
   users,
 } from '../../db/schema/index.js';
@@ -24,6 +25,33 @@ export class MembershipsService {
     private readonly tenantDb: TenantDb,
     private readonly audit: AuditService,
   ) {}
+
+  /** Roles del negocio con sus permisos. */
+  listRoles(ctx: TenantContext) {
+    return this.tenantDb.run(ctx, async (tx) => {
+      const all = await tx.select().from(roles).orderBy(roles.name);
+      const perms = await tx.select().from(rolePermissions);
+      return all.map((r) => ({ ...r, permissions: perms.filter((p) => p.roleId === r.id).map((p) => p.permissionCode).sort() }));
+    });
+  }
+
+  /** Miembros con sus roles y alcance (para el panel de usuarios). */
+  async listWithRoles(ctx: TenantContext) {
+    const members = await this.list(ctx);
+    return this.tenantDb.run(ctx, async (tx) => {
+      const assignments = await tx
+        .select({ id: roleAssignments.id, membershipId: roleAssignments.membershipId, roleId: roleAssignments.roleId, roleName: roles.name, scope: roleAssignments.scope })
+        .from(roleAssignments)
+        .innerJoin(roles, eq(roles.id, roleAssignments.roleId));
+      const scopeRows = await tx.select().from(roleAssignmentBranches);
+      return members.map((m) => ({
+        ...m,
+        roles: assignments
+          .filter((a) => a.membershipId === m.membershipId)
+          .map((a) => ({ ...a, branchIds: scopeRows.filter((b) => b.assignmentId === a.id).map((b) => b.branchId) })),
+      }));
+    });
+  }
 
   /** Miembros del negocio activo (RLS: nunca ve usuarios que no sean miembros de este negocio). */
   list(ctx: TenantContext) {
