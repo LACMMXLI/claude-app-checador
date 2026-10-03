@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useBranches } from '@/components/attendance';
 import { Card, ErrorBox, Field, Loading, useAction } from '@/components/ui';
 import { api, type CorrectionRequest, type CorrectionRequestDetail, personName } from '@/lib/api';
@@ -56,23 +56,32 @@ function RequestsView() {
   const [rejectReason, setRejectReason] = useState('');
   const action = useAction();
 
+  // recargas traslapadas (filtros, avisos en vivo, polling): solo cuenta la respuesta más reciente
+  const latestList = useRef(0);
+  const latestDetail = useRef(0);
   const load = useCallback(async () => {
     const q = new URLSearchParams();
     if (filter.status) q.set('status', filter.status);
     if (filter.branchId) q.set('branchId', filter.branchId);
+    const seq = ++latestList.current;
     try {
-      setRows(await api<CorrectionRequest[]>(`/attendance/correction-requests?${q}`));
+      const next = await api<CorrectionRequest[]>(`/attendance/correction-requests?${q}`);
+      if (seq !== latestList.current) return;
+      setRows(next);
       setError(null);
     } catch (e) {
-      setError(errorText((e as { code?: string }).code));
+      if (seq === latestList.current) setError(errorText((e as { code?: string }).code));
     }
   }, [filter]);
 
   const loadDetail = useCallback(async () => {
+    const seq = ++latestDetail.current;
     if (!selectedId) return setDetail(null);
     try {
-      setDetail(await api<CorrectionRequestDetail>(`/attendance/correction-requests/${selectedId}`));
+      const next = await api<CorrectionRequestDetail>(`/attendance/correction-requests/${selectedId}`);
+      if (seq === latestDetail.current) setDetail(next);
     } catch (e) {
+      if (seq !== latestDetail.current) return;
       setDetail(null);
       setError(errorText((e as { code?: string }).code));
     }

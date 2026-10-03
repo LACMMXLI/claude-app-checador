@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IncidentChips, StateBadge, useBranches } from '@/components/attendance';
 import { Card, ErrorBox, Field, Loading } from '@/components/ui';
 import { api, type Board, personName } from '@/lib/api';
@@ -38,16 +38,21 @@ export default function LiveAttendancePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (branches?.[0] && !branchId) setBranchId(branches[0].id);
-  }, [branches, branchId]);
+    if (branches?.[0]) setBranchId((current) => current || branches[0]!.id); // nunca pisa una elección del usuario
+  }, [branches]);
 
+  // las recargas pueden traslaparse (cambio de filtro, aviso en vivo, polling): solo cuenta la respuesta más reciente
+  const latest = useRef(0);
   const load = useCallback(async () => {
     if (!branchId) return;
+    const seq = ++latest.current;
     try {
+      const next = await api<Board>(`/attendance/board?branchId=${branchId}${date ? `&date=${date}` : ''}`);
+      if (seq !== latest.current) return;
       setError(null);
-      setBoard(await api<Board>(`/attendance/board?branchId=${branchId}${date ? `&date=${date}` : ''}`));
+      setBoard(next);
     } catch (e) {
-      setError(errorText((e as { code?: string }).code));
+      if (seq === latest.current) setError(errorText((e as { code?: string }).code));
     }
   }, [branchId, date]);
 

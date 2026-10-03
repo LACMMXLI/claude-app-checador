@@ -23,8 +23,8 @@ export default function MySessionsPage() {
   const pending = useRef<{ key: string; id: string } | null>(null);
 
   useEffect(() => {
-    if (branches?.[0] && !branchId) setBranchId(branches[0].id);
-  }, [branches, branchId]);
+    if (branches?.[0]) setBranchId((current) => current || branches[0]!.id); // nunca pisa una elección del usuario
+  }, [branches]);
 
   const load = useCallback(async () => {
     if (!branchId) return;
