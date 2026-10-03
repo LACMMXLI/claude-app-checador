@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { DomainError } from '../../common/errors.js';
 import type { Gate } from '../../common/tenancy/gate.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
@@ -106,10 +106,11 @@ export class KioskDevicesService {
     const parsed = parseKioskToken(value)!;
     const t = newToken();
     const ctx = this.contextFor(identity);
+    const activatedAt = new Date();
     await this.tenantDb.run(ctx, async (tx) => {
       const [rotated] = await tx
         .update(kioskDevices)
-        .set({ tokenPrefix: t.prefix, tokenHash: t.hash, tokenIssuedAt: new Date(), tokenRevokedAt: null })
+        .set({ tokenPrefix: t.prefix, tokenHash: t.hash, tokenIssuedAt: activatedAt, activatedAt, tokenRevokedAt: null })
         .where(and(eq(kioskDevices.id, identity.deviceId), eq(kioskDevices.tokenHash, sha256(parsed.secret))))
         .returning();
       if (!rotated) throw new DomainError('KIOSK_TOKEN_INVALID'); // otro navegador lo activó al mismo tiempo
@@ -141,9 +142,23 @@ export class KioskDevicesService {
     return { organizationId: identity.organizationId, actor: { type: 'KIOSK', deviceId: identity.deviceId }, ...extra };
   }
 
+  /**
+   * Estado DERIVADO del dispositivo (D-76): sin credencial (revocada) · pendiente de activar (credencial emitida que
+   * ningún navegador ha usado) · inactivo (desactivado) · activo.
+   */
+  static stateOf(d: { tokenHash: string | null; status: string; activatedAt: Date | null; tokenIssuedAt: Date | null }) {
+    if (!d.tokenHash) return 'NO_CREDENTIAL' as const;
+    if (d.status !== 'ACTIVE') return 'INACTIVE' as const;
+    if (!d.activatedAt || (d.tokenIssuedAt && d.activatedAt.getTime() < d.tokenIssuedAt.getTime())) return 'PENDING_ACTIVATION' as const;
+    return 'ACTIVE' as const;
+  }
+
   /** Vista segura de un kiosco: nunca incluye el hash ni el prefijo del token. */
   private view(d: typeof kioskDevices.$inferSelect) {
     return {
+      state: KioskDevicesService.stateOf(d),
+      activatedAt: d.activatedAt,
+      lastSeenIp: d.lastSeenIp,
       id: d.id,
       name: d.name,
       branchId: d.branchId,
@@ -245,7 +260,13 @@ export class KioskDevicesService {
     return this.revokeToken(ctx, deviceId, reason);
   }
 
-  async touch(ctx: TenantContext, deviceId: string): Promise<void> {
-    await this.tenantDb.run(ctx, (tx) => tx.update(kioskDevices).set({ lastSeenAt: new Date() }).where(eq(kioskDevices.id, deviceId)));
+  /** Último uso del dispositivo (a lo más una escritura por minuto: el kiosco consulta seguido). */
+  async touch(ctx: TenantContext, deviceId: string, ip?: string): Promise<void> {
+    await this.tenantDb.run(ctx, (tx) =>
+      tx
+        .update(kioskDevices)
+        .set({ lastSeenAt: new Date(), lastSeenIp: ip ? ip.slice(0, 64) : null })
+        .where(and(eq(kioskDevices.id, deviceId), or(isNull(kioskDevices.lastSeenAt), lt(kioskDevices.lastSeenAt, sql`now() - interval '1 minute'`)))),
+    );
   }
 }

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { DomainError } from '../../common/errors.js';
 import type { PlatformDb } from '../../common/tenancy/platform-db.js';
@@ -15,8 +15,10 @@ import {
   userCredentials,
   users,
   permissions,
+  policyOverrides,
 } from '../../db/schema/index.js';
 import { hashPassword } from '../auth/password.js';
+import { type PolicyLayer, validateOverride } from '../policies/policy.js';
 
 /**
  * Permisos del rol de sistema ENCARGADO (el ADMIN recibe todo el catálogo). Siempre limitados por el
@@ -154,6 +156,34 @@ export class PlatformAdminService {
         reason: `Cambio por ${actor}`,
       });
       await tx.insert(platformAuditLog).values({ actor, action: 'organization.status_changed', organizationId: org.id, details: { status } });
+    });
+  }
+
+  /**
+   * Override de política a nivel NEGOCIO desde el CLI de plataforma (p. ej. al dar de alta a Fatboy:
+   * `breakRequiredAfterMin=360`, `exitToleranceMin=5`). Así ningún negocio queda fijo en el código ni en migraciones
+   * (RN-ORG-09). Mismas validaciones de valores y niveles que el panel; queda en ambas bitácoras.
+   */
+  async setOrganizationPolicy(slug: string, values: PolicyLayer, actor = 'platform-cli'): Promise<void> {
+    const clean = validateOverride('ORGANIZATION', values);
+    if (Object.keys(clean).length === 0) throw new DomainError('VALIDATION_ERROR', { fields: ['param'] });
+    await this.platformDb.run(async (tx) => {
+      const [org] = await tx.select().from(organizations).where(eq(organizations.slug, slug));
+      if (!org) throw new DomainError('ORGANIZATION_NOT_FOUND');
+      const where = and(eq(policyOverrides.organizationId, org.id), eq(policyOverrides.scope, 'ORGANIZATION'));
+      const [existing] = await tx.select().from(policyOverrides).where(where);
+      if (existing) await tx.update(policyOverrides).set(clean as Record<string, unknown>).where(where);
+      else await tx.insert(policyOverrides).values({ organizationId: org.id, scope: 'ORGANIZATION', ...(clean as Record<string, unknown>) });
+      await tx.insert(auditLog).values({
+        organizationId: org.id,
+        actorType: 'SYSTEM',
+        action: 'policy.override_set',
+        entityType: 'policy_override',
+        entityId: `ORGANIZATION:${org.id}`,
+        after: clean,
+        reason: `Cambio por ${actor}`,
+      });
+      await tx.insert(platformAuditLog).values({ actor, action: 'policy.override_set', organizationId: org.id, details: clean });
     });
   }
 

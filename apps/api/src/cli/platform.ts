@@ -10,6 +10,7 @@ const USAGE = `Uso:
       --admin-email dueno@ejemplo.com --admin-name "Nombre" --admin-password '<mínimo 10 caracteres>'
   platform set-status --slug fatboy --status SUSPENDED|ACTIVE
   platform reset-password --email persona@ejemplo.com --password '<nueva>'
+  platform set-policy --slug fatboy --param breakRequiredAfterMin=360 --param exitToleranceMin=5
 Variables: PLATFORM_DATABASE_URL (rol platform_ops).`;
 
 const [command, ...rest] = process.argv.slice(2);
@@ -27,6 +28,7 @@ const { values } = parseArgs({
     status: { type: 'string' },
     email: { type: 'string' },
     password: { type: 'string' },
+    param: { type: 'string', multiple: true },
   },
 });
 
@@ -51,6 +53,16 @@ try {
   } else if (command === 'reset-password') {
     await admin.resetPassword(values.email ?? '', values.password ?? '');
     console.log('Contraseña global restablecida.');
+  } else if (command === 'set-policy') {
+    const layer = Object.fromEntries(
+      (values.param ?? []).map((pair) => {
+        const [key, ...raw] = pair.split('=');
+        const v = raw.join('=');
+        return [key ?? '', v === 'true' ? true : v === 'false' ? false : v === 'null' ? null : /^-?\d+$/.test(v) ? Number(v) : v];
+      }),
+    );
+    await admin.setOrganizationPolicy(values.slug ?? '', layer);
+    console.log('Política del negocio actualizada.');
   } else {
     console.log(USAGE);
     process.exitCode = 1;

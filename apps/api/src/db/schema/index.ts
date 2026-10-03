@@ -221,6 +221,8 @@ export const kioskDevices = core.table('kiosk_devices', {
   tokenRevokedAt: tstz('token_revoked_at'),
   status: text('status').notNull().default('ACTIVE'),
   lastSeenAt: tstz('last_seen_at'),
+  activatedAt: tstz('activated_at'),
+  lastSeenIp: text('last_seen_ip'),
   createdAt: tstz('created_at').notNull().defaultNow(),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });

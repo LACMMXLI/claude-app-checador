@@ -75,6 +75,7 @@ export class KioskDeviceController {
     try {
       const identity = await this.c.kiosks.authenticate(token);
       if (!req.header('authorization')) this.setCookie(res, token); // renovación deslizante
+      await this.c.kiosks.touch(this.c.kiosks.contextFor(identity), identity.deviceId, req.ip); // último uso (D-76)
       return identity;
     } catch (error) {
       if (!req.header('authorization')) this.clearCookie(res);
@@ -102,8 +103,6 @@ export class KioskDeviceController {
   @Get('session')
   async session(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const identity = await this.device(req, res);
-    const ctx = this.c.kiosks.contextFor(identity, { ip: req.ip });
-    await this.c.kiosks.touch(ctx, identity.deviceId);
     return { ...(await this.c.kiosks.describe(identity)), serverTime: new Date() };
   }
 
@@ -113,7 +112,6 @@ export class KioskDeviceController {
   async identify(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     const identity = await this.device(req, res);
     const ctx = this.c.kiosks.contextFor(identity, { ip: req.ip });
-    await this.c.kiosks.touch(ctx, identity.deviceId);
     return this.c.kioskAttendance.identify(ctx, identity, parse(identifySchema, body).pin);
   }
 
