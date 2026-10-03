@@ -65,6 +65,12 @@ services:
       API_INTERNAL_URL: http://api:${PORT:-3000}
       PORT: 3001
     expose: ["3001"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # Herramienta de operación (NO arranca sola):
   #   docker compose --profile tools run --rm platform create-organization --name Fatboy --slug fatboy --timezone America/Tijuana ...

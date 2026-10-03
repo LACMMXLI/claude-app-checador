@@ -1,0 +1,16 @@
+# Contexto de build = raíz del repositorio (ver docker-compose.yml). Nada de secretos ni artefactos locales.
+.git
+.github
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+docs
+*.md
