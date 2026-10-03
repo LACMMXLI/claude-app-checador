@@ -106,3 +106,32 @@ button.add { font-size: .9rem; margin-left: .25rem; }
 .compare dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; }
 .compare dt { color: var(--muted); }
 .compare dd { margin: 0; }
+/* ── Fase 4 ── */
+button.danger { border-color: var(--danger); color: var(--danger); }
+.ok { color: var(--ok); }
+.badge.req-PENDING, .badge.kiosk-PENDING_ACTIVATION { color: #b45309; }
+.badge.req-APPROVED, .badge.kiosk-ACTIVE { color: var(--ok); }
+.badge.req-REJECTED, .badge.kiosk-NO_CREDENTIAL { color: var(--danger); }
+.badge.req-CANCELLED, .badge.kiosk-INACTIVE { color: var(--off); }
+.nav-badge { margin-left: .35rem; background: var(--danger); color: #fff; border-radius: 999px; padding: 0 .45rem; font-size: .75rem; }
+.live-indicator { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; color: var(--muted); }
+.live-indicator::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+.live-indicator.connected::before { background: var(--ok); }
+.live-indicator.reconnecting::before { background: #b45309; }
+.record-list { list-style: none; padding: 0; margin: .5rem 0 1rem; display: flex; flex-direction: column; gap: .5rem; }
+.record { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .6rem .75rem; border: 1px solid var(--border); border-radius: var(--radius); text-align: left; flex-wrap: wrap; }
+.my-records { text-align: left; display: flex; flex-direction: column; gap: .5rem; }
+.my-records h2 { margin-top: .5rem; }
+.my-records.compact .record select, .my-records.compact .record button { min-height: 48px; font-size: 1rem; }
+.request-form { display: flex; flex-direction: column; gap: .6rem; }
+.request-form textarea { font: inherit; padding: .5rem; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+fieldset.instant { border: 1px solid var(--border); border-radius: var(--radius); display: flex; gap: .5rem; flex-wrap: wrap; padding: .5rem; }
+fieldset.instant legend { color: var(--muted); font-size: .85rem; }
+.kiosk-records { max-width: 720px; }
+.kiosk-secondary { font-size: 1.1rem; padding: .9rem; border-radius: 14px; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+tr.selected td { background: var(--bg); }
+dl.details { margin: 0 0 1rem; display: grid; grid-template-columns: auto 1fr; gap: .35rem .75rem; }
+dl.details dt { color: var(--muted); }
+dl.details dd { margin: 0; }

@@ -38,9 +38,12 @@ export class AuthController {
   private async describe(session: ResolvedSession) {
     const memberships = await this.c.gate.listUserMemberships(session.userId);
     let permissions: Record<string, 'ALL' | string[]> = {};
+    let employeeId: string | null = null;
     if (session.organizationId && session.membershipId) {
       const ctx = SessionsService.tenantContext(session);
-      permissions = (await this.c.rbac.loadAccess(ctx, session.membershipId)).summary();
+      const access = await this.c.rbac.loadAccess(ctx, session.membershipId);
+      permissions = access.summary();
+      employeeId = access.employeeId; // ficha ligada a la membresía: habilita "Mis jornadas" (decisión 1)
     }
     return {
       user: { id: session.userId, email: session.email, displayName: session.displayName },
@@ -49,6 +52,7 @@ export class AuthController {
         ? { id: session.organizationId, name: memberships.find((m) => m.organizationId === session.organizationId)!.organizationName }
         : null,
       permissions,
+      employeeId,
       expiresAt: session.expiresAt,
     };
   }

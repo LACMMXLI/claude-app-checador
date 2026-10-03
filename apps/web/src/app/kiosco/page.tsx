@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PunchAction, ShiftSummary } from '@/lib/api';
+import { MyRecords } from '@/components/my-records';
+import type { OwnRecords, PunchAction, RequestDraft, ShiftSummary } from '@/lib/api';
 import { shiftLabel, timeIn } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
 
@@ -11,6 +12,9 @@ import { errorText, t } from '@/lib/i18n';
  *   ningún secreto (ni en localStorage ni en memoria más allá de la petición de activación).
  * - El PIN solo vive en el estado del componente mientras se captura, enmascarado; nunca va en la URL.
  * - Tras cada checada se muestra la confirmación unos segundos y se vuelve al PIN sin datos del empleado.
+ * - "Mis registros" (D-70, precisión G): con el mismo pase corto (renovado en cada llamada), datos mínimos de la
+ *   ventana de solicitud; 20 s de inactividad, "Terminar" o un pase vencido borran TODO el estado del empleado.
+ *   No hay navegación (ni historial del navegador) que permita volver a ver los datos de la persona anterior.
  */
 interface KioskInfo {
   organization: { name: string; branding: { logoUrl?: string } | null };
@@ -66,7 +70,10 @@ const PIN_LENGTH = 6;
 
 export default function KioskPage() {
   const [info, setInfo] = useState<KioskInfo | null>(null);
-  const [mode, setMode] = useState<'loading' | 'activate' | 'pin' | 'employee' | 'done'>('loading');
+  const [mode, setMode] = useState<'loading' | 'activate' | 'pin' | 'employee' | 'records' | 'done'>('loading');
+  const [records, setRecords] = useState<OwnRecords | null>(null);
+  const [activity, setActivity] = useState(0);
+  const pendingRequest = useRef<{ key: string; id: string } | null>(null);
   const [offline, setOffline] = useState(false);
   const [pin, setPin] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -82,7 +89,9 @@ export default function KioskPage() {
   const reset = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     pendingAction.current = null;
+    pendingRequest.current = null;
     setWho(null);
+    setRecords(null);
     setDone(null);
     setPin('');
     setMessage(null);
@@ -146,12 +155,92 @@ export default function KioskPage() {
 
   // inactividad: nunca dejar en pantalla los datos de un empleado
   useEffect(() => {
-    if (mode !== 'employee' && mode !== 'done') return;
+    if (mode !== 'employee' && mode !== 'records' && mode !== 'done') return;
     timer.current = setTimeout(reset, mode === 'done' ? DONE_MS : IDLE_MS);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [mode, reset]);
+  }, [mode, reset, activity]);
+
+  // si la pestaña se oculta o se abandona, no queda nada del empleado al volver
+  useEffect(() => {
+    const hide = () => {
+      if (document.visibilityState === 'hidden') reset();
+    };
+    document.addEventListener('visibilitychange', hide);
+    window.addEventListener('pagehide', reset);
+    return () => {
+      document.removeEventListener('visibilitychange', hide);
+      window.removeEventListener('pagehide', reset);
+    };
+  }, [reset]);
+
+  const touch = useCallback(() => setActivity((n) => n + 1), []);
+
+  /** Un pase vencido o inválido termina la sesión del empleado (vuelve al PIN sin datos). */
+  const ticketExpired = useCallback(
+    (e: unknown) => {
+      if (e instanceof KioskError && e.code === 'KIOSK_TICKET_INVALID') {
+        reset();
+        setMessage(errorText(e.code));
+        return true;
+      }
+      return false;
+    },
+    [reset],
+  );
+
+  async function openRecords(ticket: string) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { ticket: renewed, ticketExpiresAt: _exp, ...data } = await kioskApi<OwnRecords & { ticket: string; ticketExpiresAt: string }>('my-records', { ticket });
+      setWho((w) => (w ? { ...w, ticket: renewed } : w));
+      setRecords(data);
+      setMode('records');
+      return renewed;
+    } catch (e) {
+      if (!ticketExpired(e)) handleError(e);
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitRequest(draft: RequestDraft): Promise<boolean> {
+    if (!who) return false;
+    const { branchId: _ignored, ...body } = draft; // en el kiosco la sucursal es la del dispositivo (la fija el servidor)
+    const key = JSON.stringify(body);
+    if (!pendingRequest.current || pendingRequest.current.key !== key) pendingRequest.current = { key, id: crypto.randomUUID() };
+    setBusy(true);
+    setMessage(null);
+    try {
+      const r = await kioskApi<{ ticket: string }>('correction-requests', { ticket: who.ticket, clientRequestId: pendingRequest.current.id, ...body });
+      pendingRequest.current = null;
+      setBusy(false);
+      await openRecords(r.ticket);
+      return true;
+    } catch (e) {
+      if (!ticketExpired(e)) handleError(e);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelRequest(id: string) {
+    if (!who) return;
+    setBusy(true);
+    try {
+      const r = await kioskApi<{ ticket: string }>(`correction-requests/${id}/cancel`, { ticket: who.ticket });
+      setBusy(false);
+      await openRecords(r.ticket);
+    } catch (e) {
+      if (!ticketExpired(e)) handleError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function activate() {
     setBusy(true);
@@ -318,7 +407,18 @@ export default function KioskPage() {
               </button>
             ))}
           </div>
+          <button className="kiosk-secondary" disabled={busy} onClick={() => void openRecords(who.ticket)} data-testid="kiosk-my-records">{t('kiosk.myRecords')}</button>
           <button className="link" onClick={reset}>{t('kiosk.back')}</button>
+        </div>
+      )}
+
+      {mode === 'records' && who && records && (
+        <div className="kiosk-panel kiosk-records" data-testid="kiosk-records">
+          <h1>{t('kiosk.myRecords')} · {who.employee.displayName}</h1>
+          <p className="muted">{t('kiosk.privacy')}</p>
+          {message && <p className="error kiosk-message" role="alert">{message}</p>}
+          <MyRecords data={records} busy={busy} onSubmit={submitRequest} onCancelRequest={cancelRequest} onActivity={touch} compact />
+          <button className="primary kiosk-wide" onClick={reset} data-testid="kiosk-finish">{t('kiosk.finish')}</button>
         </div>
       )}
 

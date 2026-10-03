@@ -10,7 +10,7 @@ import { errorText, t } from '@/lib/i18n';
 
 type Row = Incident & { employee: PersonRef; branchName: string | null; shift: ShiftSummary | null; canResolve: boolean; canCorrect: boolean };
 
-const TYPES = ['FALTA', 'RETARDO', 'SALIDA_OLVIDADA', 'JORNADA_ABIERTA_EXCEDIDA', 'REGRESO_COMIDA_FALTANTE', 'COMIDA_EXCEDIDA', 'SIN_TURNO_PROGRAMADO', 'SIN_ASIGNACION_SUCURSAL', 'TURNO_EN_OTRA_SUCURSAL', 'ENTRADA_FALTANTE'];
+const TYPES = ['FALTA', 'RETARDO', 'SALIDA_ANTICIPADA', 'SIN_COMIDA', 'SALIDA_OLVIDADA', 'JORNADA_ABIERTA_EXCEDIDA', 'REGRESO_COMIDA_FALTANTE', 'COMIDA_EXCEDIDA', 'SIN_TURNO_PROGRAMADO', 'SIN_ASIGNACION_SUCURSAL', 'TURNO_EN_OTRA_SUCURSAL', 'ENTRADA_FALTANTE'];
 
 /**
  * Incidencias: nunca se borran; se resuelven con motivo (justificada, confirmada, descartada) o quedan
@@ -139,7 +139,10 @@ export default function IncidentsPage() {
                   <td>{i.branchName}</td>
                   <td>{t(`incident.type.${i.type}`)}</td>
                   <td>{i.shift ? shiftLabel(i.shift) : '—'}</td>
-                  <td>{t(`incident.status.${i.status}`)}{i.resolution ? ` · ${t(`incident.resolution.${i.resolution}`)}` : ''}</td>
+                  <td title={i.resolution === 'VOIDED' ? t('incident.voidedHelp') : undefined}>
+                    {t(`incident.status.${i.status}`)}{i.resolution ? ` · ${t(`incident.resolution.${i.resolution}`)}` : ''}
+                    {i.resolutionSource === 'SYSTEM' && i.resolutionReason ? <div className="muted">{i.resolutionReason}</div> : null}
+                  </td>
                   <td>{dateTimeIn(i.detectedAt, tzOf(i.branchId))}</td>
                   <td className="row">
                     {i.workSessionId && <Link href={`/jornadas/${i.workSessionId}`}>{t('att.detail')}</Link>}

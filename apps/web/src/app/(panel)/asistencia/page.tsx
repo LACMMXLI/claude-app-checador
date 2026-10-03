@@ -7,6 +7,9 @@ import { Card, ErrorBox, Field, Loading } from '@/components/ui';
 import { api, type Board, personName } from '@/lib/api';
 import { shiftLabel, signedMinutes, timeIn } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
+import { useLive } from '@/lib/live';
+
+const LIVE_KINDS = ['attendance.session', 'attendance.incident'] as const;
 
 const COUNTERS: { key: string; states: string[] | null; late?: boolean }[] = [
   { key: 'scheduled', states: null },
@@ -23,7 +26,8 @@ const COUNTERS: { key: string; states: string[] | null; late?: boolean }[] = [
 /**
  * Asistencia en vivo (D-60): por sucursal y día operativo. Los estados (aún no llega, retardo, ausente,
  * trabajando, en comida, salió, falta…) los calcula el servidor con turno PUBLICADO + hora + política +
- * jornada real; no se guardan. Se actualiza solo cada 30 s.
+ * jornada real; no se guardan. Fase 4 (D-75): se actualiza al instante por SSE (avisos de invalidación) y, si el
+ * canal en vivo no está disponible, cada 30 s como antes.
  */
 export default function LiveAttendancePage() {
   const { branches } = useBranches();
@@ -49,9 +53,8 @@ export default function LiveAttendancePage() {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 30_000);
-    return () => clearInterval(timer);
   }, [load]);
+  const live = useLive(branchId || undefined, LIVE_KINDS, () => void load(), Boolean(branchId));
 
   const selected = COUNTERS.find((c) => c.key === filter);
   const rows = (board?.rows ?? []).filter((r) => !selected || (selected.late ? r.late || r.state === 'LATE_NOT_ARRIVED' : !selected.states || selected.states.includes(r.state)));
@@ -76,6 +79,9 @@ export default function LiveAttendancePage() {
           </select>
         </Field>
         <button onClick={() => void load()}>{t('live.refresh')}</button>
+        <span className={`live-indicator ${live}`} data-testid="live-indicator" data-status={live}>
+          {live === 'connected' ? t('live.connected') : live === 'polling' ? t('live.polling') : t('live.reconnecting')}
+        </span>
       </div>
       <ErrorBox message={error} />
       {!board ? <Loading /> : (

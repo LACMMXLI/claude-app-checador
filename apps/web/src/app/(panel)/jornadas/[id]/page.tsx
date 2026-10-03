@@ -4,11 +4,12 @@ import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { StateBadge } from '@/components/attendance';
 import { Card, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
-import { api, personName, type SessionDetail } from '@/lib/api';
+import Link from 'next/link';
+import { api, type CorrectionRequest, personName, type SessionDetail } from '@/lib/api';
 import { dateTimeIn, localParts, minutesLabel, shiftLabel, signedMinutes, timeIn } from '@/lib/format';
 import { t } from '@/lib/i18n';
 
-type Action = 'SET_CLOCK_IN' | 'SET_CLOCK_OUT' | 'SET_BREAK_START' | 'SET_BREAK_END' | 'LINK_SHIFT' | 'UNLINK_SHIFT';
+type Action = 'SET_CLOCK_IN' | 'SET_CLOCK_OUT' | 'SET_BREAK_START' | 'SET_BREAK_END' | 'ADD_BREAK' | 'LINK_SHIFT' | 'UNLINK_SHIFT';
 
 /** Lo que una corrección cambió, en palabras (original → corregido). */
 function describeValue(v: Record<string, unknown> | null, tz: string): string {
@@ -32,7 +33,12 @@ export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: d, error, reload } = useLoad(() => api<SessionDetail>(`/attendance/sessions/${id}`), [id]);
   const action = useAction();
-  const [form, setForm] = useState<{ action: Action; date: string; time: string; breakId: string; shiftId: string; reason: string }>({ action: 'SET_CLOCK_IN', date: '', time: '', breakId: '', shiftId: '', reason: '' });
+  const [form, setForm] = useState<{ action: Action; date: string; time: string; endDate: string; endTime: string; breakId: string; shiftId: string; reason: string }>({ action: 'SET_CLOCK_IN', date: '', time: '', endDate: '', endTime: '', breakId: '', shiftId: '', reason: '' });
+  // solicitudes ligadas a esta jornada (D-70): se consultan por empleado y día operativo
+  const requests = useLoad(
+    () => (d ? api<CorrectionRequest[]>(`/attendance/correction-requests?employeeId=${d.employee.id}&from=${d.effective.operationalDate}&to=${d.effective.operationalDate}`) : Promise.resolve([])),
+    [d?.effective.id, d?.effective.version],
+  );
   const [resolveReason, setResolveReason] = useState('');
 
   useEffect(() => {
@@ -51,6 +57,7 @@ export default function SessionDetailPage() {
     'SET_CLOCK_IN',
     'SET_CLOCK_OUT',
     ...(d.breaks.length ? (['SET_BREAK_START', 'SET_BREAK_END'] as Action[]) : []),
+    'ADD_BREAK',
     ...(e.shiftId ? (['UNLINK_SHIFT'] as Action[]) : d.linkableShifts.length ? (['LINK_SHIFT'] as Action[]) : []),
   ];
 
@@ -58,8 +65,8 @@ export default function SessionDetailPage() {
     const brk = d!.breaks.find((b) => b.id === breakId) ?? d!.breaks[0];
     const source =
       next === 'SET_CLOCK_IN' ? e.startedAt : next === 'SET_CLOCK_OUT' ? e.endedAt : next === 'SET_BREAK_START' ? brk?.startedAt : next === 'SET_BREAK_END' ? brk?.endedAt : null;
-    const parts = source ? localParts(source, tz) : localParts(new Date().toISOString(), tz);
-    setForm({ ...form, action: next, breakId: brk?.id ?? '', shiftId: d!.linkableShifts[0]?.id ?? '', date: parts.date, time: parts.time });
+    const parts = source ? localParts(source, tz) : localParts(next === 'ADD_BREAK' ? e.startedAt : new Date().toISOString(), tz);
+    setForm({ ...form, action: next, breakId: brk?.id ?? '', shiftId: d!.linkableShifts[0]?.id ?? '', date: parts.date, time: parts.time, endDate: parts.date, endTime: parts.time });
   }
 
   async function submit(ev: FormEvent) {
@@ -69,6 +76,7 @@ export default function SessionDetailPage() {
       form.action === 'LINK_SHIFT' ? { action: form.action, shiftId: form.shiftId }
       : form.action === 'UNLINK_SHIFT' ? { action: form.action }
       : form.action === 'SET_BREAK_START' || form.action === 'SET_BREAK_END' ? { action: form.action, breakId: form.breakId, at }
+      : form.action === 'ADD_BREAK' ? { action: form.action, start: at, end: { date: form.endDate, time: form.endTime } }
       : { action: form.action, at };
     const ok = await action.run(() => api(`/attendance/sessions/${id}/corrections`, { method: 'POST', body: { ...body, expectedVersion: e.version, reason: form.reason } }));
     if (ok) {
@@ -199,9 +207,17 @@ export default function SessionDetailPage() {
                   <Field label={t('att.correct.time')}><input type="time" required value={form.time} onChange={(ev) => setForm({ ...form, time: ev.target.value })} /></Field>
                 </>
               )}
+              {form.action === 'ADD_BREAK' && (
+                <>
+                  <Field label={`${t('att.correct.breakStart')} · ${t('att.correct.date')}`}><input type="date" required value={form.date} onChange={(ev) => setForm({ ...form, date: ev.target.value })} /></Field>
+                  <Field label={`${t('att.correct.breakStart')} · ${t('att.correct.time')}`}><input type="time" required value={form.time} onChange={(ev) => setForm({ ...form, time: ev.target.value })} /></Field>
+                  <Field label={`${t('att.correct.breakEnd')} · ${t('att.correct.date')}`}><input type="date" required value={form.endDate} onChange={(ev) => setForm({ ...form, endDate: ev.target.value })} /></Field>
+                  <Field label={`${t('att.correct.breakEnd')} · ${t('att.correct.time')}`}><input type="time" required value={form.endTime} onChange={(ev) => setForm({ ...form, endTime: ev.target.value })} /></Field>
+                </>
+              )}
             </div>
             <Field label={t('common.reason')}><input required value={form.reason} onChange={(ev) => setForm({ ...form, reason: ev.target.value })} /></Field>
-            <div><button className="primary" disabled={action.busy || !form.reason.trim() || (form.action.startsWith('SET_') && !form.time)}>{t('att.correct.submit')}</button></div>
+            <div><button className="primary" disabled={action.busy || !form.reason.trim() || ((form.action.startsWith('SET_') || form.action === 'ADD_BREAK') && !form.time) || (form.action === 'ADD_BREAK' && !form.endTime)}>{t('att.correct.submit')}</button></div>
           </form>
         )}
       </Card>
@@ -221,6 +237,26 @@ export default function SessionDetailPage() {
             </tbody>
           </table>
         )}
+      </Card>
+
+      <Card title={t('att.detail.requests')}>
+        {(() => {
+          const mine = (requests.data ?? []).filter((r) => r.workSessionId === e.id || (r.shiftId && r.shiftId === e.shiftId));
+          return mine.length === 0 ? <p className="muted">{t('req.empty')}</p> : (
+            <table data-testid="session-requests">
+              <tbody>
+                {mine.map((r) => (
+                  <tr key={r.id}>
+                    <td>{dateTimeIn(r.createdAt, tz)}</td><td>{t(`req.action.${r.action}`)}</td>
+                    <td><span className={`badge req-${r.status}`}>{t(`req.status.${r.status}`)}</span></td>
+                    <td className="muted">{r.reason}</td>
+                    <td><Link href={`/solicitudes?id=${r.id}`}>{t('att.detail')}</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
       </Card>
 
       <Card title={t('att.detail.audit')}>

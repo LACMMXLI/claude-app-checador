@@ -40,6 +40,12 @@ async function tablet(branchId: string) {
 }
 
 describe('solicitudes por HTTP', () => {
+  it('/auth/me expone la ficha ligada (habilita "Mis jornadas") solo a quien la tiene', async () => {
+    expect((await manager.get('/api/auth/me')).body.employeeId).toBe(F.lupe.id);
+    expect((await admin.get('/api/auth/me')).body.employeeId).toBeNull();
+    expect((await admin.get('/api/attendance/my/sessions?branchId=' + F.VEN)).body.error.code).toBe('NO_EMPLOYEE_RECORD');
+  });
+
   it('kiosco: PIN → Mis registros → solicitar; panel: bandeja → aprobar; el pase nunca viaja en la URL', async () => {
     const p = await F.employee('Http', F.VEN);
     await F.publishedShift(p, F.VEN, '2026-10-05', '07:00', '15:00');

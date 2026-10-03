@@ -31,6 +31,8 @@ export interface Me {
   memberships: { organizationId: string; name: string; slug: string }[];
   activeOrganization: { id: string; name: string } | null;
   permissions: Record<string, 'ALL' | string[]>;
+  /** Ficha de empleado ligada a la membresía activa (habilita "Mis jornadas"). */
+  employeeId: string | null;
 }
 
 export interface Branch {
@@ -191,6 +193,7 @@ export interface Incident {
   details: Record<string, unknown>;
   detectedAt: string;
   resolution: string | null;
+  resolutionSource?: 'USER' | 'CORRECTION' | 'SYSTEM' | null;
   resolvedAt: string | null;
   resolutionReason: string | null;
   version: number;
@@ -225,3 +228,108 @@ export interface SessionDetail {
 }
 
 export const personName = (p: PersonRef) => [p.firstName, p.lastName].filter(Boolean).join(' ') || p.id.slice(0, 8);
+
+// ── Fase 4 ─────────────────────────────────────────────────────────────────────
+export type RequestAction = 'SET_CLOCK_IN' | 'SET_CLOCK_OUT' | 'SET_BREAK_START' | 'SET_BREAK_END' | 'ADD_BREAK' | 'CREATE_SESSION';
+export type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export interface LocalInstant {
+  date: string;
+  time: string;
+}
+
+export interface CorrectionRequest {
+  id: string;
+  branchId: string;
+  branchName: string | null;
+  employeeId: string;
+  employee: PersonRef;
+  operationalDate: string;
+  action: RequestAction;
+  workSessionId: string | null;
+  breakId: string | null;
+  shiftId: string | null;
+  proposedStart: string;
+  proposedEnd: string | null;
+  proposedLocal: { start: LocalInstant; end?: LocalInstant | null; timezone?: string } | null;
+  reason: string;
+  channel: 'KIOSK' | 'PANEL';
+  status: RequestStatus;
+  decidedAt: string | null;
+  decidedBy: { id: string; displayName: string | null } | null;
+  decisionReason: string | null;
+  correctionId: string | null;
+  version: number;
+  createdAt: string;
+  canDecide: boolean;
+}
+
+export interface CorrectionRequestDetail extends CorrectionRequest {
+  timezone: string;
+  session: (SessionView & { shift: ShiftSummary | null }) | null;
+  recorded: { type: PunchAction; occurredAt: string }[];
+  shift: ShiftSummary | null;
+}
+
+/** "Mis registros" (kiosco) / "Mis jornadas" (panel): solo la propia ficha y la ventana de solicitud. */
+export interface OwnRecords {
+  window: { from: string; to: string; days: number };
+  sessions: {
+    id: string;
+    operationalDate: string;
+    branchId: string;
+    branchName: string | null;
+    timezone: string;
+    startedAt: string;
+    endedAt: string | null;
+    status: 'OPEN' | 'REVIEW' | 'CLOSED';
+    shift: { startTime: string; endTime: string; crossesMidnight: boolean } | null;
+    breaks: { id: string; sequence: number; startedAt: string; endedAt: string | null }[];
+  }[];
+  absences: { shiftId: string; operationalDate: string; branchId: string; branchName: string | null; timezone: string; startTime: string | null; endTime: string | null; crossesMidnight: boolean }[];
+  requests: { id: string; action: RequestAction; status: RequestStatus; operationalDate: string; workSessionId: string | null; shiftId: string | null; proposedLocal: CorrectionRequest['proposedLocal']; decisionReason: string | null; createdAt: string }[];
+}
+
+export interface RequestDraft {
+  action: RequestAction;
+  workSessionId?: string | null;
+  breakId?: string | null;
+  shiftId?: string | null;
+  branchId?: string | null;
+  start: LocalInstant;
+  end?: LocalInstant | null;
+  reason: string;
+}
+
+export type PeriodKey = 'today' | 'yesterday' | 'week_current' | 'week_previous' | 'fortnight_current' | 'fortnight_previous' | 'month_current' | 'month_previous';
+export type ReportKind = 'summary' | 'sessions' | 'incidents' | 'corrections';
+export interface ReportTable {
+  report: ReportKind;
+  from: string;
+  to: string;
+  columns: { key: string; header: string; kind: 'text' | 'number' | 'date' }[];
+  rows: Record<string, string | number | null>[];
+}
+
+/** Descarga un archivo generado por un POST (exportaciones): el nombre lo da el servidor. */
+export async function download(path: string, body: unknown): Promise<void> {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'checador' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(res.status, data?.error?.code ?? 'HTTP_ERROR', data?.error?.details ?? {});
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'reporte';
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

@@ -98,6 +98,7 @@ export class AttendanceQueryService {
       detectedAt: i.detectedAt,
       detectedBy: i.detectedBy,
       resolution: i.resolution,
+      resolutionSource: i.resolutionSource,
       resolvedAt: i.resolvedAt,
       resolutionReason: i.resolutionReason,
       version: i.version,

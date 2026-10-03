@@ -23,6 +23,8 @@ node dist/src/cli/check-tenancy.js
 node dist/src/cli/platform.js create-organization --name Fatboy --slug fatboy --timezone America/Tijuana \
   --branch VEN=Venecia --branch SMA="San Marcos" --branch AME=Américas \
   --admin-email dueno@fatboy.example --admin-name "Dueño Fatboy" --admin-password 'contraseña-larga-123' >/dev/null
+# Fase 4: valores de Fatboy por CLI de plataforma (RN-ORG-09: ningún negocio queda fijo en el código ni en migraciones)
+node dist/src/cli/platform.js set-policy --slug fatboy --param breakRequiredAfterMin=360 --param exitToleranceMin=5 >/dev/null
 
 export E2E_APP_DATABASE_URL="postgresql://app_user:$APP_USER_PASSWORD@$HOSTPART/$DB"  # también lo usa el E2E de reconciliación
 DATABASE_URL="$E2E_APP_DATABASE_URL" PIN_PEPPER=e2e-pepper-e2e-pepper-e2e-pepper-1234 PORT=3900 node dist/src/main.js > /tmp/e2e-api.log 2>&1 &
