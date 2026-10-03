@@ -85,6 +85,14 @@ export class AttendanceController {
     @Inject(RequestAuth) private readonly auth: RequestAuth,
   ) {}
 
+  /** D-78: día operativo de "hoy" (sucursal o negocio) para los filtros del panel. */
+  @Get('today')
+  async today(@Req() req: Request, @Query() q: unknown) {
+    const { ctx, access } = await this.auth.tenant(req);
+    const { branchId } = parse(z.object({ branchId: z.string().uuid().optional() }), q);
+    return this.c.attendanceQuery.today(ctx, access, branchId);
+  }
+
   @Get('board')
   async board(@Req() req: Request, @Query() q: unknown) {
     const { ctx, access } = await this.auth.tenant(req);

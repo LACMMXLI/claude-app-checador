@@ -16,6 +16,18 @@ export function useBranches() {
   return { branches, tzOf };
 }
 
+/**
+ * D-78 · "Hoy" = día operativo que calcula el SERVIDOR con la zona y la hora de corte de la política (de la sucursal o
+ * del negocio). El navegador nunca deduce la fecha por su cuenta (su reloj y su zona pueden ser otros).
+ */
+export function useOperationalToday(branchId?: string) {
+  const [today, setToday] = useState<string | null>(null);
+  useEffect(() => {
+    void api<{ today: string }>(`/attendance/today${branchId ? `?branchId=${branchId}` : ''}`).then((r) => setToday(r.today), () => setToday(null));
+  }, [branchId]);
+  return today;
+}
+
 export const StateBadge = ({ state }: { state: string }) => <span className={`state ${state}`}>{t(`state.${state}`)}</span>;
 
 export function IncidentChips({ incidents }: { incidents: IncidentRef[] }) {
@@ -41,9 +53,14 @@ export function shiftDate(date: string, days: number): string {
 /** D-61 · Historial de asistencia de un empleado: PROGRAMADO vs REAL, pausas, incidencias, correcciones y faltas. */
 export function AttendanceHistory({ employeeId }: { employeeId: string }) {
   const { tzOf } = useBranches();
-  const [range, setRange] = useState({ from: shiftDate(new Date().toISOString().slice(0, 10), -30), to: new Date().toISOString().slice(0, 10) });
+  const today = useOperationalToday();
+  const [range, setRange] = useState({ from: '', to: '' });
+  useEffect(() => {
+    if (today) setRange((r) => (r.to ? r : { from: shiftDate(today, -30), to: today }));
+  }, [today]);
   const [data, setData] = useState<{ sessions: SessionRow[]; absences: (Incident & { branchName: string | null; shift: ShiftSummary | null })[] } | null>(null);
   useEffect(() => {
+    if (!range.from || !range.to) return;
     void api<typeof data>(`/attendance/employees/${employeeId}/history?from=${range.from}&to=${range.to}`).then(setData, () => setData({ sessions: [], absences: [] }));
   }, [employeeId, range]);
   return (

@@ -31,7 +31,8 @@ import {
   sessionView,
   shiftSummary,
 } from './attendance-common.js';
-import { isLate, operationalDate, pendingArrivalState } from './attendance-time.js';
+import { isLate, pendingArrivalState } from './attendance-time.js';
+import { operationalDateIn } from '../../common/operational-day.js';
 
 /** Estado de una fila del tablero (D-60). Se DERIVA de turno publicado + hora + política + jornada real. */
 export type BoardState =
@@ -110,21 +111,37 @@ export class AttendanceQueryService {
     };
   }
 
+  /**
+   * D-78 · "Hoy" para los filtros del panel: el día operativo de la sucursal (zona + hora de corte de su política) o,
+   * sin sucursal, el del negocio. Lo calcula el servidor; el navegador nunca deduce la fecha por su cuenta.
+   */
+  async today(ctx: TenantContext, access: AccessProfile, branchId?: string) {
+    if (branchId) this.assertBranch(access, branchId);
+    else {
+      const scope = access.branchesFor('attendance.view');
+      if (scope !== 'ALL' && scope.size === 0) throw new DomainError('FORBIDDEN', { permission: 'attendance.view' });
+    }
+    return this.tenantDb.run(ctx, async (tx) => {
+      const calendar = await this.policies.calendarTx(tx, ctx, branchId);
+      return { today: operationalDateIn(this.clock(), calendar), timezone: calendar.timezone, cutoff: calendar.cutoff.slice(0, 5) };
+    });
+  }
+
   // ── tablero en vivo ─────────────────────────────────────────────────────────
   async board(ctx: TenantContext, access: AccessProfile, branchId: string, date?: string) {
     this.assertBranch(access, branchId);
     const now = this.clock();
     return this.tenantDb.run(ctx, async (tx) => {
       const branch = await loadBranch(tx, branchId);
-      const branchPolicy = (await this.policies.getEffectiveTx(tx, ctx, { branchId })).policy;
-      const today = operationalDate(now, branch.timezone, branchPolicy.operationalCutoff);
+      // D-78: "hoy" = día operativo de la sucursal (zona + hora de corte); los turnos se agrupan por SU día operativo
+      const today = operationalDateIn(now, await this.policies.calendarTx(tx, ctx, branchId));
       const day = date ?? today;
 
       const shiftRows = await tx
         .select({ shift: shifts })
         .from(shifts)
         .innerJoin(weeklySchedules, eq(weeklySchedules.id, shifts.scheduleId))
-        .where(and(eq(shifts.branchId, branchId), eq(shifts.businessDate, day), eq(shifts.status, 'SCHEDULED'), eq(weeklySchedules.status, 'PUBLISHED')))
+        .where(and(eq(shifts.branchId, branchId), eq(shifts.operationalDate, day), eq(shifts.status, 'SCHEDULED'), eq(weeklySchedules.status, 'PUBLISHED')))
         .orderBy(asc(shifts.startsAt));
       const dayShifts = shiftRows.map((r) => r.shift);
       const sessions = await tx
@@ -326,8 +343,8 @@ export class AttendanceQueryService {
                   eq(shifts.branchId, s.branchId),
                   eq(shifts.status, 'SCHEDULED'),
                   eq(weeklySchedules.status, 'PUBLISHED'),
-                  gte(shifts.businessDate, addDaysToDate(s.operationalDate, -1)),
-                  lte(shifts.businessDate, addDaysToDate(s.operationalDate, 1)),
+                  gte(shifts.operationalDate, addDaysToDate(s.operationalDate, -1)),
+                  lte(shifts.operationalDate, addDaysToDate(s.operationalDate, 1)),
                   sql`NOT EXISTS (SELECT 1 FROM attendance.work_sessions ws WHERE ws.shift_id = ${shifts.id})`,
                 ),
               )

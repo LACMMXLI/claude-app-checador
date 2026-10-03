@@ -14,6 +14,9 @@ import {
   resolvePolicy,
   validateOverride,
 } from './policy.js';
+import type { OperationalCalendar } from '../../common/operational-day.js';
+import { organizationCalendars } from './operational-calendar.js';
+import { refreshFutureShiftOperationalDates } from '../scheduling/operational-dates.js';
 
 type OverrideRow = typeof policyOverrides.$inferSelect;
 
@@ -31,7 +34,20 @@ export class PoliciesService {
   constructor(
     private readonly tenantDb: TenantDb,
     private readonly audit: AuditService,
+    private readonly clock: () => Date = () => new Date(),
   ) {}
+
+  /**
+   * D-78 · Calendario operativo (zona IANA efectiva + hora de corte efectiva) de una sucursal, o del negocio si no se
+   * indica sucursal. TODO cálculo de día operativo del sistema obtiene su calendario aquí.
+   */
+  async calendarTx(tx: Tx, ctx: TenantContext, branchId?: string | null): Promise<OperationalCalendar> {
+    const calendars = await organizationCalendars(tx, ctx.organizationId);
+    if (!branchId) return calendars.organization;
+    const calendar = calendars.branches.get(branchId);
+    if (!calendar) throw new DomainError('BRANCH_NOT_FOUND');
+    return calendar;
+  }
 
   /** Política de plataforma (singleton completo). */
   private async platformDefaults(tx: Tx): Promise<EffectivePolicy> {
@@ -154,6 +170,10 @@ export class PoliciesService {
         });
       }
       const [after] = await tx.select().from(policyOverrides).where(where);
+      // D-78: cambiar la hora de corte recalcula el día operativo de los turnos que aún no empiezan
+      if ('operationalCutoff' in clean) {
+        await refreshFutureShiftOperationalDates(tx, ctx.organizationId, this.clock(), scope === 'BRANCH' ? [targetId!] : undefined);
+      }
       await this.audit.record(tx, ctx, {
         action: 'policy.override_set',
         entityType: 'policy_override',

@@ -8,7 +8,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import type { AccessProfile } from '../auth/rbac.service.js';
 import type { PoliciesService } from '../policies/policies.service.js';
 import { breaksOf, loadBranch, loadShift, sessionView, shiftSummary } from './attendance-common.js';
-import { operationalDate } from './attendance-time.js';
+import { operationalDateIn } from '../../common/operational-day.js';
 import type { CorrectionInput, CorrectionsService, LocalInstant } from './corrections.service.js';
 
 export type RequestAction = 'SET_CLOCK_IN' | 'SET_CLOCK_OUT' | 'SET_BREAK_START' | 'SET_BREAK_END' | 'ADD_BREAK' | 'CREATE_SESSION';
@@ -98,9 +98,11 @@ export class CorrectionRequestsService {
         if (start.getTime() > now.getTime() || (end && end.getTime() > now.getTime())) throw new DomainError('CORRECTION_IN_FUTURE');
         if (end && end.getTime() <= start.getTime()) throw new DomainError('CORRECTION_ORDER_INVALID', { field: 'end' });
         const { policy } = await this.policies.getEffectiveTx(tx, ctx, { branchId: target.branchId, employeeId });
-        const opDate = target.operationalDate ?? operationalDate(start, branch.timezone, policy.operationalCutoff);
+        const calendar = await this.policies.calendarTx(tx, ctx, target.branchId);
+        // D-78: el día operativo del objetivo (jornada o turno) o, sin objetivo, el de la hora de inicio propuesta
+        const opDate = target.operationalDate ?? operationalDateIn(start, calendar);
         // Precisión A: la ventana se mide en DÍAS OPERATIVOS de la sucursal, no en horas desde created_at
-        const today = operationalDate(now, branch.timezone, policy.operationalCutoff);
+        const today = operationalDateIn(now, calendar);
         const age = daysBetween(opDate, today);
         if (age < 0 || age > policy.correctionRequestWindowDays) {
           throw new DomainError('REQUEST_OUTSIDE_WINDOW', { windowDays: policy.correctionRequestWindowDays, operationalDate: opDate });
@@ -185,7 +187,7 @@ export class CorrectionRequestsService {
           .select({ id: incidents.id })
           .from(incidents)
           .where(and(eq(incidents.shiftId, shift.id), eq(incidents.type, 'FALTA'), eq(incidents.status, 'OPEN')));
-        return { ...empty, branchId: shift.branchId, shiftId: shift.id, incidentId: falta?.id ?? null, operationalDate: shift.businessDate };
+        return { ...empty, branchId: shift.branchId, shiftId: shift.id, incidentId: falta?.id ?? null, operationalDate: shift.operationalDate };
       }
       if (!input.branchId) throw new DomainError('VALIDATION_ERROR', { fields: ['branchId'] });
       const branch = await loadBranch(tx, input.branchId);
@@ -397,9 +399,8 @@ export class CorrectionRequestsService {
   async ownRecords(ctx: TenantContext, employeeId: string, referenceBranchId: string) {
     const now = this.clock();
     return this.tenantDb.run(ctx, async (tx) => {
-      const branch = await loadBranch(tx, referenceBranchId);
       const { policy } = await this.policies.getEffectiveTx(tx, ctx, { branchId: referenceBranchId, employeeId });
-      const to = operationalDate(now, branch.timezone, policy.operationalCutoff);
+      const to = operationalDateIn(now, await this.policies.calendarTx(tx, ctx, referenceBranchId));
       const from = addDaysToDate(to, -policy.correctionRequestWindowDays);
       const sessions = await tx
         .select()

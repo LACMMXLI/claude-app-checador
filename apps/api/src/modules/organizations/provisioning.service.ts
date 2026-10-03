@@ -19,6 +19,7 @@ import {
 } from '../../db/schema/index.js';
 import { hashPassword } from '../auth/password.js';
 import { type PolicyLayer, validateOverride } from '../policies/policy.js';
+import { refreshFutureShiftOperationalDates } from '../scheduling/operational-dates.js';
 
 /**
  * Permisos del rol de sistema ENCARGADO (el ADMIN recibe todo el catálogo). Siempre limitados por el
@@ -184,6 +185,8 @@ export class PlatformAdminService {
         reason: `Cambio por ${actor}`,
       });
       await tx.insert(platformAuditLog).values({ actor, action: 'policy.override_set', organizationId: org.id, details: clean });
+      // D-78: la nueva hora de corte aplica a los turnos que aún no empiezan
+      if ('operationalCutoff' in clean) await refreshFutureShiftOperationalDates(tx, org.id, new Date());
     });
   }
 

@@ -1,6 +1,6 @@
 # 01 · Reglas de negocio — Reloj checador (plataforma multi-negocio)
 
-> **Versión 1.4 — CONGELADA** (1.1 = D-21 protección del PIN; 1.2 = D-22…D-32 planificación de horarios y turnos; 1.3 = D-33…D-65 asistencia, jornadas, checadas, pausas y kiosco; 1.4 = D-66…D-77 cierre del ciclo: faltas anuladas, salida anticipada, sin comida, pausa omitida, solicitudes de corrección, reportes y exportación, tiempo real y control de kioscos — contrato en `05-fase-4-contrato.md`). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
+> **Versión 1.5 — CONGELADA** (1.5 = D-78 un solo día operativo) (1.1 = D-21 protección del PIN; 1.2 = D-22…D-32 planificación de horarios y turnos; 1.3 = D-33…D-65 asistencia, jornadas, checadas, pausas y kiosco; 1.4 = D-66…D-77 cierre del ciclo: faltas anuladas, salida anticipada, sin comida, pausa omitida, solicitudes de corrección, reportes y exportación, tiempo real y control de kioscos — contrato en `05-fase-4-contrato.md`). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
 > Fatboy es el **primer negocio (tenant)**; ninguna regla ni dato está diseñado específicamente para Fatboy.
 > Los valores `default` son los del **nivel plataforma** y se pueden sobrescribir por negocio, sucursal o empleado según la jerarquía de configuración (§10).
 
@@ -143,7 +143,8 @@ Modelo: **Plantilla → Horario semanal → Turno concreto → (Fase 3) Jornada 
 - **RN-ASI-08** **Retardo real** (D-41, D-42): diferencia completa con signo contra `starts_at` (06:40 ⇒ −20; 07:08 ⇒ +8 sin incidencia con tolerancia 10; 07:12 ⇒ +12 y `RETARDO`). Se guarda la hora real, sin redondear.
 - **RN-ASI-09** **Estados derivados** (D-43): 07:00–07:10 en tolerancia · 07:11–07:59 retardo/aún no llega · desde 08:00 ausente/no ha llegado (no definitivo) · con Entrada: trabajando con su retardo real · falta solo si el turno termina sin Entrada.
 - **RN-ASI-10** **Reconciliación** (D-44, D-47, D-48, D-50): proceso periódico e idempotente que materializa `FALTA` (una por turno), `SALIDA_OLVIDADA`, `JORNADA_ABIERTA_EXCEDIDA` y `REGRESO_COMIDA_FALTANTE`. Nunca inventa horas.
-- **RN-ASI-11** **Día operativo** (D-46): con turno = fecha local de inicio del turno; sin turno = hora local de la sucursal y la hora de corte (Fatboy 05:00, D-45).
+- **RN-ASI-11** **Día operativo** (D-46, D-78): mientras no llega la hora de corte de la sucursal (política `operational_cutoff`, en su zona IANA; Fatboy 05:00, D-45), todo pertenece al día operativo **anterior**. El turno pertenece al día operativo de su **inicio**; una jornada con turno, al del turno; una jornada sin turno, al de su Entrada. Ej. con corte 05:00: 02-oct 23:30 ⇒ 02-oct · 03-oct 01:30 ⇒ 02-oct · 03-oct 04:59:59 ⇒ 02-oct · 03-oct 05:00:00 ⇒ 03-oct.
+- **RN-ASI-20** **Una sola fecha para agrupar** (D-78): tablero, jornadas, incidencias (incluida la FALTA), reconciliación, solicitudes, correcciones, reportes, exportaciones y todo filtro "hoy" usan ese mismo día operativo. Los instantes reales nunca cambian. La fecha de planeación del turno (`business_date`, columna del horario semanal) no se usa para asistencia. Un turno con jornada real no cambia de día operativo; cambiar la hora de corte o la zona recalcula solo los turnos que aún no empiezan.
 - **RN-ASI-12** **Kiosco** (D-56 … D-59): credencial propia del dispositivo (cookie `HttpOnly`, activación con token de un solo uso o código de emparejamiento); PIN enmascarado que nunca aparece en logs, errores, auditoría ni URLs; al empleado solo su nombre, sucursal, turno oficial actual/próximo, acciones y confirmación; regreso automático a la pantalla de PIN.
 - **RN-ASI-13** **Duración y salida** (D-64, D-65): duración real = salida efectiva − entrada efectiva; pausas aparte, sin descuento automático; diferencia de salida con signo, sin sanciones.
 
@@ -312,7 +313,7 @@ Modelo de permisos: **roles con permisos granulares** y **alcance** por asignaci
 
 Muestra los estados de §11 (RN-INC-06) más: **En comida** (minutos transcurridos; rojo si excede), **Salió** y **Revisión**.
 
-- **RN-RT-01** Incluye turnos nocturnos que iniciaron "ayer" y siguen abiertos. "Hoy" = **día operativo** de la sucursal.
+- **RN-RT-01** Incluye turnos nocturnos que iniciaron "ayer" y siguen abiertos. "Hoy" = **día operativo** de la sucursal (D-78): a las 02:00 del día 3 el tablero muestra el día 2, incluidos los turnos que empiezan antes del corte.
 - **RN-RT-02** Actualización ≤ 2 s tras una checada; estados dependientes del tiempo cada ~30 s.
 - **RN-RT-03** Cada usuario recibe solo su negocio y las sucursales de su alcance.
 - **RN-RT-04** Tiempo real por **SSE** (D-75) en el tablero y en la bandeja de solicitudes: los avisos solo **invalidan** (tipo, id, sucursal, operación; sin datos personales) y la pantalla vuelve a consultar con sus permisos. Un aviso perdido nunca afecta la consistencia.
@@ -321,7 +322,7 @@ Muestra los estados de §11 (RN-INC-06) más: **En comida** (minutos transcurrid
 
 ## 16. Reportes y exportación
 
-- **RN-REP-01** Filtros: empleado, sucursal y rango. Por **fecha laboral**, solo dentro del negocio y alcance.
+- **RN-REP-01** Filtros: empleado, sucursal y rango. Por **día operativo** (D-78), solo dentro del negocio y alcance.
 - **RN-REP-02** **Accesos rápidos:** Hoy · Ayer · Esta semana · Semana pasada · 1–15 · 16–fin de mes · Este mes · Mes pasado · Rango personalizado. Se calculan en la zona de la sucursal; "Hoy/Ayer" usan el día operativo; "Semana" usa `week_start_day`.
 - **RN-REP-03** Métricas: horas programadas, horas trabajadas, retardos (y minutos), faltas, pausas (duración y exceso por pausa y acumulado), salidas anticipadas, incidencias y correcciones.
 - **RN-REP-04** Jornadas corregidas visibles con acceso al antes/después.

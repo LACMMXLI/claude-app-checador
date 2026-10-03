@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { shiftDate, useBranches } from '@/components/attendance';
+import { shiftDate, useBranches, useOperationalToday } from '@/components/attendance';
 import { Card, ErrorBox, Field, Loading, useAction } from '@/components/ui';
 import { api, type Incident, personName, type PersonRef, type ShiftSummary } from '@/lib/api';
-import { dateTimeIn, shiftLabel, todayLocal } from '@/lib/format';
+import { dateTimeIn, shiftLabel } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
 
 type Row = Incident & { employee: PersonRef; branchName: string | null; shift: ShiftSummary | null; canResolve: boolean; canCorrect: boolean };
@@ -18,7 +18,12 @@ const TYPES = ['FALTA', 'RETARDO', 'SALIDA_ANTICIPADA', 'SIN_COMIDA', 'SALIDA_OL
  */
 export default function IncidentsPage() {
   const { branches, tzOf } = useBranches();
-  const [filter, setFilter] = useState({ branchId: '', status: 'OPEN', type: '', from: shiftDate(todayLocal(), -30), to: todayLocal() });
+  // D-78: el rango por defecto parte del día operativo del negocio (lo calcula el servidor)
+  const today = useOperationalToday();
+  const [filter, setFilter] = useState({ branchId: '', status: 'OPEN', type: '', from: '', to: '' });
+  useEffect(() => {
+    if (today) setFilter((f) => (f.to ? f : { ...f, from: shiftDate(today, -30), to: today }));
+  }, [today]);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolving, setResolving] = useState<{ row: Row; resolution: 'JUSTIFIED' | 'CONFIRMED' | 'DISMISSED'; reason: string } | null>(null);
@@ -26,6 +31,7 @@ export default function IncidentsPage() {
   const action = useAction();
 
   const load = useCallback(async () => {
+    if (!filter.from || !filter.to) return;
     const q = new URLSearchParams({ from: filter.from, to: filter.to });
     for (const k of ['branchId', 'status', 'type'] as const) if (filter[k]) q.set(k, filter[k]);
     try {

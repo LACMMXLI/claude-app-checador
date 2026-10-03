@@ -51,8 +51,8 @@ describe('crear turnos', () => {
     try {
       await c.query('BEGIN');
       const sch = (await c.query(`SELECT id FROM scheduling.weekly_schedules WHERE organization_id = $1 AND branch_id = $2 LIMIT 1`, [F.orgId, F.VEN])).rows[0].id;
-      const err = await pgError(c, `INSERT INTO scheduling.shifts (organization_id, schedule_id, branch_id, employee_id, business_date, starts_at, ends_at, timezone_snapshot)
-        VALUES ($1, $2, $3, $4, '2026-10-07', '2026-10-07T10:00Z', '2026-10-07T10:00Z', 'America/Tijuana')`, [F.orgId, sch, F.VEN, F.maria]);
+      const err = await pgError(c, `INSERT INTO scheduling.shifts (organization_id, schedule_id, branch_id, employee_id, business_date, operational_date, starts_at, ends_at, timezone_snapshot)
+        VALUES ($1, $2, $3, $4, '2026-10-07', '2026-10-07', '2026-10-07T10:00Z', '2026-10-07T10:00Z', 'America/Tijuana')`, [F.orgId, sch, F.VEN, F.maria]);
       expect(err?.code).toBe('23514');
       await c.query('ROLLBACK');
     } finally {
@@ -90,8 +90,8 @@ describe('traslapes (D-29)', () => {
     const c = await pools.platform.connect();
     try {
       await c.query('BEGIN');
-      const err = await pgError(c, `INSERT INTO scheduling.shifts (organization_id, schedule_id, branch_id, employee_id, business_date, starts_at, ends_at, timezone_snapshot)
-        SELECT organization_id, schedule_id, branch_id, employee_id, business_date, starts_at + interval '1 hour', ends_at + interval '1 hour', timezone_snapshot FROM scheduling.shifts WHERE id = $1`, [s1.id]);
+      const err = await pgError(c, `INSERT INTO scheduling.shifts (organization_id, schedule_id, branch_id, employee_id, business_date, operational_date, starts_at, ends_at, timezone_snapshot)
+        SELECT organization_id, schedule_id, branch_id, employee_id, business_date, operational_date, starts_at + interval '1 hour', ends_at + interval '1 hour', timezone_snapshot FROM scheduling.shifts WHERE id = $1`, [s1.id]);
       expect(err?.code).toBe('23P01');
       await c.query('ROLLBACK');
     } finally {

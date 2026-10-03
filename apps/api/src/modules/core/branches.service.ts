@@ -5,11 +5,13 @@ import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { TenantDb } from '../../common/tenancy/tenant-db.js';
 import { branches, organizations } from '../../db/schema/index.js';
 import type { AuditService } from '../audit/audit.service.js';
+import { refreshFutureShiftOperationalDates } from '../scheduling/operational-dates.js';
 
 export class BranchesService {
   constructor(
     private readonly tenantDb: TenantDb,
     private readonly audit: AuditService,
+    private readonly clock: () => Date = () => new Date(),
   ) {}
 
   async create(ctx: TenantContext, input: { code: string; name: string; timezone?: string | null }) {
@@ -47,6 +49,8 @@ export class BranchesService {
       const [before] = await tx.select().from(branches).where(eq(branches.id, branchId));
       if (!before) throw new DomainError('BRANCH_NOT_FOUND');
       const [after] = await tx.update(branches).set(patch).where(eq(branches.id, branchId)).returning();
+      // D-78: otra zona horaria cambia el día operativo de los turnos que aún no empiezan
+      if ('timezone' in patch && patch.timezone !== before.timezone) await refreshFutureShiftOperationalDates(tx, ctx.organizationId, this.clock(), [branchId]);
       await this.audit.record(tx, ctx, {
         action: 'branch.updated',
         entityType: 'branch',

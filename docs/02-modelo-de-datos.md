@@ -1,7 +1,7 @@
 # 02 · Modelo de datos (PostgreSQL) — multi-negocio
 
-> **Versión 1.4 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
-> Estado de implementación: **Fases 0 a 4 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`, `attendance`; migraciones `0001`–`0010` en `apps/api/db/migrations`). Las migraciones aplicadas nunca se modifican: cada cambio es una migración incremental.
+> **Versión 1.5 — CONGELADA** (D-78). Deriva de `01-reglas-de-negocio.md`.
+> Estado de implementación: **Fases 0 a 4 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`, `attendance`; migraciones `0001`–`0011` en `apps/api/db/migrations`). Las migraciones aplicadas nunca se modifican: cada cambio es una migración incremental.
 
 ## 1. Convenciones
 
@@ -195,7 +195,8 @@ Todas con `organization_id NOT NULL`, FKs compuestas y RLS forzado.
 | Columna | Notas |
 |---|---|
 | `id`, `organization_id`, `schedule_id`, `branch_id`, `employee_id` | FK `(organization_id, schedule_id, branch_id)` → horario: la sucursal del turno es la de su horario; FKs compuestas a sucursal y empleado del mismo negocio |
-| `business_date` | fecha local en que **inicia** (cuadrícula semanal) |
+| `business_date` | fecha local en que **inicia**: fecha de PLANEACIÓN (cuadrícula y semana del horario). La asistencia no la usa |
+| `operational_date` | **D-78** día operativo del inicio (zona + hora de corte de la sucursal, función canónica). Lo usa toda la asistencia; no cambia si el turno ya tiene jornada (`SHIFT_HAS_ATTENDANCE`); se recalcula para turnos que aún no empiezan si cambian el corte o la zona |
 | `starts_at`, `ends_at` | UTC; `CHECK (ends_at > starts_at)`, `≤ 24 h` |
 | `timezone_snapshot` | zona IANA usada al crearlo (validada) |
 | `scheduled_minutes` | **columna generada** de los instantes (sin duplicar datos; no descuenta comida) |
@@ -244,6 +245,9 @@ Trigger `guard_work_session`: solo se liga a turnos **oficiales** (`SCHEDULED` +
 CONSTRAINT events_idempotency UNIQUE (organization_id, device_id, client_event_id)   -- D-54
 -- trigger forbid_mutation (UPDATE/DELETE/TRUNCATE) + sin privilegios
 ```
+
+### Día operativo (D-78, migración `0011`)
+Una sola regla (`src/common/operational-day.ts`): antes de la hora de corte, el día anterior. `work_sessions.operational_date` = el del turno ligado (trigger `SESSION_DATE_MISMATCH`) o el de la Entrada sin turno; `incidents.operational_date` de una FALTA = el de su turno (`INCIDENT_DATE_MISMATCH`); `correction_requests.operational_date` = el de su jornada o turno (`REQUEST_DATE_MISMATCH`). `core.operational_date(timestamptz, text, time)` es la gemela SQL usada solo para rellenar datos en migraciones (con prueba de paridad).
 
 ### `breaks` — pausas (D-14, D-49)
 `work_session_id`, `sequence`, `started_at`, `ended_at` (nunca se inventa, D-50), `allowed_minutes` y `tolerance_minutes` (copia de la política), **`duration_minutes`** y **`exceeded_minutes`** = columnas **generadas** (minutos con segundos truncados), `origin`, `version`. `UNIQUE (organization_id, work_session_id, sequence)`; una sola pausa abierta por jornada. `max_breaks` vive en la política: 2 pausas no requieren migración.

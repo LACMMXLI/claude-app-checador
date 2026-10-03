@@ -141,12 +141,12 @@ export async function shiftsInWindow(
   );
 }
 
-/** Turnos oficiales de la misma sucursal y día que ya terminaron sin jornada (marca ENTRADA_FALTANTE, RN-EVT-11). */
-export async function endedShiftsWithoutSession(tx: Tx, employeeId: string, branchId: string, businessDate: string, now: Date) {
+/** Turnos oficiales de la misma sucursal y DÍA OPERATIVO (D-78) que ya terminaron sin jornada (ENTRADA_FALTANTE, RN-EVT-11). */
+export async function endedShiftsWithoutSession(tx: Tx, employeeId: string, branchId: string, operationalDate: string, now: Date) {
   return tx
     .select()
     .from(shifts)
-    .where(and(eq(shifts.employeeId, employeeId), eq(shifts.branchId, branchId), eq(shifts.businessDate, businessDate), official(), withoutSession(), lte(shifts.endsAt, now)));
+    .where(and(eq(shifts.employeeId, employeeId), eq(shifts.branchId, branchId), eq(shifts.operationalDate, operationalDate), official(), withoutSession(), lte(shifts.endsAt, now)));
 }
 
 /** Próximo turno oficial (para mostrarle al empleado en el kiosco; nunca borradores — D-34). */
@@ -253,6 +253,7 @@ export function shiftSummary(shift: (ShiftRow & { scheduleStatus?: string }) | n
     branchId: shift.branchId,
     branchName: branchName ?? null,
     businessDate: shift.businessDate,
+    operationalDate: shift.operationalDate,
     startsAt: shift.startsAt,
     endsAt: shift.endsAt,
     timezone: shift.timezoneSnapshot,

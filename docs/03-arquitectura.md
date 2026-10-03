@@ -1,6 +1,6 @@
 # 03 · Arquitectura
 
-> **Versión 1.4 — CONGELADA.** Estado: **Fases 0, 1, 2, 3 y 4 implementadas y probadas** (ver §10). CI de GitHub Actions en verde. La validación con Docker/Coolify la realiza el dueño en su servidor (§9).
+> **Versión 1.5 — CONGELADA** (D-78). Estado: **Fases 0, 1, 2, 3 y 4 implementadas y probadas** (ver §10). CI de GitHub Actions en verde. La validación con Docker/Coolify la realiza el dueño en su servidor (§9).
 
 ## 1. Resumen
 
@@ -15,7 +15,7 @@
 | Frontend | **Next.js 16 + React 19**, CSS propio (sin framework visual todavía); panel funcional responsive; textos por **sistema de traducciones** (es-MX). El panel reenvía `/api/*` a la API (proxy del mismo origen) | Fase 1: panel. Fase 3: kiosco táctil (`/kiosco`) y asistencia |
 | Tiempo real | **SSE** (`LISTEN/NOTIFY` de PostgreSQL → `EventSource`), polling de respaldo | Fase 4 |
 | Excel / CSV | `exceljs` 4.4.0 (fijada) · CSV propio (RFC 4180, BOM, fórmulas neutralizadas) | Fase 4 |
-| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel y del kiosco) | 373 pruebas + 12 E2E |
+| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel y del kiosco) | 390 pruebas + 12 E2E |
 | CI | GitHub Actions: typecheck → build → migraciones desde cero → `check:tenancy` → pruebas → smoke | Fase 0 |
 
 **Por qué NestJS y no solo rutas API de Next.js:** módulos que crecerán (mesas, adelantos, nómina, comunicados), procesos en segundo plano con scheduler, tiempo real con estado en memoria, múltiples clientes (kiosco, panel, móvil) y el **contexto de negocio** como pieza transversal y auditable.
@@ -90,6 +90,9 @@ Lo único que ocurre antes de conocer el negocio: `auth.resolve_kiosk_token`, `a
 - **API:** `NotificationHub` mantiene UNA conexión dedicada por proceso y hace `LISTEN` por negocio solo mientras hay suscriptores; si la conexión se cae, reconecta y manda `resync`. `GET /api/attendance/stream?branchId=` exige `attendance.view` y la sucursal en el alcance (otra sucursal u otro negocio ⇒ 404); reenvía solo avisos de su negocio y de las sucursales de su alcance; `ping` cada 25 s; revalida sesión/negocio/permisos cada 60 s y cierra si cambian; vida máxima 30 min; 5 conexiones por usuario (429).
 - **Panel:** `useLive` (`EventSource` con la cookie de sesión) agrupa los avisos y vuelve a consultar los endpoints normales (RBAC + RLS). Sin canal (error, 60 s sin `ping`) ⇒ polling cada 30 s e indicador; reintento con espera creciente. El proxy `/api/*` de Next transmite `text/event-stream` sin búfer (`x-accel-buffering: no`).
 - **Consistencia:** perder un aviso solo retrasa la pantalla (recarga de respaldo cada 2 min aun con canal activo); nunca es fuente de verdad.
+
+### 2.8.0 Día operativo canónico (D-78)
+Una función pura (`common/operational-day.ts`) y un solo resolvedor de calendario (`PoliciesService.calendarTx` → zona y hora de corte efectivas por sucursal). Turnos (`shifts.operational_date`, guardado al planear), jornadas, FALTAS, solicitudes, tablero, reconciliación, reportes, exportaciones y el "hoy" del panel (`GET /api/attendance/today`) salen de ahí; PostgreSQL impide que jornada, falta o solicitud diverjan de su turno. Una prueba de arquitectura impide una segunda definición o volver a agrupar asistencia por `business_date`.
 
 ### 2.8.1 Solicitudes, reportes y kioscos (Fase 4)
 - **Solicitudes** (`CorrectionRequestsService`): crear (kiosco por pase, panel por membresía con ficha; idempotente), cancelar, aprobar y rechazar. Aprobar ejecuta `CorrectionsService.applyTx/createSessionTx` en la MISMA transacción, con el instante absoluto guardado y `request_id`; si falla, nada cambia. Unicidad, transiciones y "nadie decide la suya" también en PostgreSQL.

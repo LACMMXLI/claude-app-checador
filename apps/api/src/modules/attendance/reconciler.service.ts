@@ -78,7 +78,7 @@ export class ReconcilerService {
         // Bloquea el turno y revalida: si en paralelo se canceló o reasignó, no se crea la falta (D-66). La guarda de la BD
         // (FALTA_NOT_APPLICABLE) es la última barrera; un savepoint evita que un turno invalide toda la reconciliación.
         const [still] = await tx
-          .select({ id: shifts.id })
+          .select({ id: shifts.id, operationalDate: shifts.operationalDate })
           .from(shifts)
           .where(and(eq(shifts.id, shift.id), eq(shifts.status, 'SCHEDULED'), eq(shifts.employeeId, shift.employeeId), eq(shifts.branchId, shift.branchId)))
           .for('share');
@@ -91,7 +91,7 @@ export class ReconcilerService {
             branchId: shift.branchId,
             employeeId: shift.employeeId,
             shiftId: shift.id,
-            operationalDate: shift.businessDate,
+            operationalDate: still.operationalDate, // D-78: el día operativo del turno
             details: { startsAt: shift.startsAt, endsAt: shift.endsAt },
           },
           'RECONCILER',
@@ -107,7 +107,7 @@ export class ReconcilerService {
           entityType: 'shift',
           entityId: shift.id,
           branchId: shift.branchId,
-          after: { incidentId: incident.id, employeeId: shift.employeeId, businessDate: shift.businessDate },
+          after: { incidentId: incident.id, employeeId: shift.employeeId, operationalDate: still.operationalDate },
         });
       }
 

@@ -20,7 +20,7 @@ import {
   resolveIncidents,
   snapshotOf,
 } from './attendance-common.js';
-import { operationalDate } from './attendance-time.js';
+import { type OperationalCalendar, operationalDateIn } from '../../common/operational-day.js';
 import { syncDerivedIncidents } from './session-rules.js';
 
 /** Hora local en la zona de la sucursal donde ocurrió la jornada (DST explícito, como en planificación). */
@@ -156,6 +156,16 @@ export class CorrectionsService {
     return row!;
   }
 
+  /**
+   * D-78 · Calendario de una jornada SIN turno: zona de la sucursal y la hora de corte CONGELADA en la jornada al abrirse
+   * (los cambios de política aplican hacia adelante); las jornadas antiguas sin ese dato usan el corte vigente.
+   */
+  private async sessionCalendar(tx: Tx, ctx: TenantContext, s: { branchId: string; policySnapshot: unknown }): Promise<OperationalCalendar> {
+    const calendar = await this.policies.calendarTx(tx, ctx, s.branchId);
+    const cutoff = (s.policySnapshot as Partial<PolicySnapshot>).operationalCutoff;
+    return cutoff ? { ...calendar, cutoff } : calendar;
+  }
+
   mapDbError(error: unknown): never {
     if (error instanceof DomainError) throw error;
     if (isPgError(error, '23P01')) throw new DomainError('SESSION_OVERLAP');
@@ -212,13 +222,12 @@ export class CorrectionsService {
         if (s.endedAt && at.getTime() > s.endedAt.getTime()) throw new DomainError('CORRECTION_ORDER_INVALID', { field: 'clockIn' });
         if (list.length && at.getTime() > list[0]!.startedAt.getTime()) throw new DomainError('CORRECTION_ORDER_INVALID', { field: 'clockIn' });
         await this.assertNoOverlap(tx, s.employeeId, s.id, at, s.endedAt);
-        const snap = s.policySnapshot as Partial<PolicySnapshot>;
-        const cutoff = snap.operationalCutoff ?? (await this.policies.getEffectiveTx(tx, ctx, { branchId: s.branchId })).policy.operationalCutoff;
         original = { startedAt: s.startedAt };
         corrected = { startedAt: at };
+        // D-78: ligada a turno conserva el día del turno; sin turno, el de la nueva Entrada (corte congelado en la jornada)
         await tx
           .update(workSessions)
-          .set({ startedAt: at, operationalDate: s.shiftId ? s.operationalDate : operationalDate(at, branch.timezone, cutoff), version: s.version + 1 })
+          .set({ startedAt: at, operationalDate: s.shiftId ? s.operationalDate : operationalDateIn(at, await this.sessionCalendar(tx, ctx, s)), version: s.version + 1 })
           .where(eq(workSessions.id, s.id));
         break;
       }
@@ -302,17 +311,16 @@ export class CorrectionsService {
         if (!shift || shift.employeeId !== s.employeeId || shift.branchId !== s.branchId) throw new DomainError('SHIFT_NOT_LINKABLE');
         if (shift.status !== 'SCHEDULED' || shift.scheduleStatus !== 'PUBLISHED') throw new DomainError('SHIFT_NOT_OFFICIAL');
         original = { shiftId: null, operationalDate: s.operationalDate };
-        corrected = { shiftId: shift.id, operationalDate: shift.businessDate };
-        await tx.update(workSessions).set({ shiftId: shift.id, operationalDate: shift.businessDate, version: s.version + 1 }).where(eq(workSessions.id, s.id));
+        // D-78: la jornada ligada toma el día operativo del turno
+        corrected = { shiftId: shift.id, operationalDate: shift.operationalDate };
+        await tx.update(workSessions).set({ shiftId: shift.id, operationalDate: shift.operationalDate, version: s.version + 1 }).where(eq(workSessions.id, s.id));
         resolveTypes = ['SIN_TURNO_PROGRAMADO', 'ENTRADA_FALTANTE'];
         resolveFaltaShiftId = shift.id;
         break;
       }
       case 'UNLINK_SHIFT': {
         if (!s.shiftId) throw new DomainError('SESSION_NOT_LINKED');
-        const snap = s.policySnapshot as Partial<PolicySnapshot>;
-        const cutoff = snap.operationalCutoff ?? (await this.policies.getEffectiveTx(tx, ctx, { branchId: s.branchId })).policy.operationalCutoff;
-        const opDate = operationalDate(s.startedAt, branch.timezone, cutoff);
+        const opDate = operationalDateIn(s.startedAt, await this.sessionCalendar(tx, ctx, s));
         original = { shiftId: s.shiftId, operationalDate: s.operationalDate };
         corrected = { shiftId: null, operationalDate: opDate };
         await tx.update(workSessions).set({ shiftId: null, operationalDate: opDate, version: s.version + 1 }).where(eq(workSessions.id, s.id));
@@ -380,14 +388,14 @@ export class CorrectionsService {
     if (end.getTime() < start.getTime()) throw new DomainError('CORRECTION_ORDER_INVALID', { field: 'clockOut' });
     const { policy } = await this.policies.getEffectiveTx(tx, ctx, { branchId: input.branchId, employeeId: input.employeeId });
     let shiftId: string | null = null;
-    let opDate = operationalDate(start, branch.timezone, policy.operationalCutoff);
+    let opDate = operationalDateIn(start, await this.policies.calendarTx(tx, ctx, input.branchId));
     if (input.shiftId) {
       await tx.select({ id: shifts.id }).from(shifts).where(eq(shifts.id, input.shiftId)).for('update');
       const shift = await loadShift(tx, input.shiftId);
       if (!shift || shift.employeeId !== input.employeeId || shift.branchId !== input.branchId) throw new DomainError('SHIFT_NOT_LINKABLE');
       if (shift.status !== 'SCHEDULED' || shift.scheduleStatus !== 'PUBLISHED') throw new DomainError('SHIFT_NOT_OFFICIAL');
       shiftId = shift.id;
-      opDate = shift.businessDate;
+      opDate = shift.operationalDate; // D-78
     }
     await this.assertNoOverlap(tx, input.employeeId, null, start, end);
     const [session] = await tx

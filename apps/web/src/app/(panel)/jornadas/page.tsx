@@ -2,20 +2,27 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { IncidentChips, shiftDate, useBranches } from '@/components/attendance';
+import { IncidentChips, shiftDate, useBranches, useOperationalToday } from '@/components/attendance';
 import { Card, ErrorBox, Field, Loading } from '@/components/ui';
 import { api, personName, type SessionRow } from '@/lib/api';
-import { minutesLabel, shiftLabel, signedMinutes, timeIn, todayLocal } from '@/lib/format';
+import { minutesLabel, shiftLabel, signedMinutes, timeIn } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
 
 /** Jornadas reales con su turno, entrada/salida efectivas, estado, incidencias y correcciones. */
 export default function SessionsPage() {
   const { branches, tzOf } = useBranches();
-  const [filter, setFilter] = useState({ branchId: '', from: shiftDate(todayLocal(), -7), to: todayLocal(), status: '', onlyWithIncidents: false });
+  // D-78: el rango por defecto parte del día operativo del negocio (lo calcula el servidor)
+  const today = useOperationalToday();
+  const [filter, setFilter] = useState({ branchId: '', from: '', to: '', status: '', onlyWithIncidents: false });
   const [rows, setRows] = useState<SessionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (today) setFilter((f) => (f.to ? f : { ...f, from: shiftDate(today, -7), to: today }));
+  }, [today]);
+
+  useEffect(() => {
+    if (!filter.from || !filter.to) return;
     const q = new URLSearchParams({ from: filter.from, to: filter.to });
     if (filter.branchId) q.set('branchId', filter.branchId);
     if (filter.status) q.set('status', filter.status);

@@ -62,6 +62,8 @@ export interface Shift {
   branchId: string;
   employeeId: string;
   businessDate: string;
+  /** D-78: día operativo del turno (el que usa toda la asistencia). */
+  operationalDate: string;
   startsAt: string;
   endsAt: string;
   timezone: string;
@@ -95,6 +97,7 @@ export interface ShiftSummary {
   branchId: string;
   branchName: string | null;
   businessDate: string;
+  operationalDate: string;
   startsAt: string;
   endsAt: string;
   timezone: string;

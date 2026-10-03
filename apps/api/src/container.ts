@@ -40,7 +40,7 @@ export function createContainer(options: ContainerOptions) {
   const tenantDb = new TenantDb(options.appPool);
   const gate = new Gate(options.appPool);
   const audit = new AuditService();
-  const policies = new PoliciesService(tenantDb, audit);
+  const policies = new PoliciesService(tenantDb, audit, options.clock);
   const employees = new EmployeesService(tenantDb, audit, {
     pepper: options.pinPepper,
     clock: options.clock,
@@ -58,7 +58,7 @@ export function createContainer(options: ContainerOptions) {
     audit,
     policies,
     employees,
-    branches: new BranchesService(tenantDb, audit),
+    branches: new BranchesService(tenantDb, audit, options.clock),
     memberships: new MembershipsService(tenantDb, audit),
     rbac: new RbacService(tenantDb),
     auth,

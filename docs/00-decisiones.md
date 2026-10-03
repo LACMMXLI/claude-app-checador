@@ -1,6 +1,6 @@
 # 00 · Registro de decisiones
 
-Todas las decisiones funcionales actuales están **cerradas** (reglas v1.4 y modelo v1.4 congelados; D-1 … D-77). Contrato de la Fase 4: `05-fase-4-contrato.md`. Un cambio posterior se anota aquí con fecha y motivo.
+Todas las decisiones funcionales actuales están **cerradas** (reglas v1.5 y modelo v1.5 congelados; D-1 … D-78). Contrato de la Fase 4: `05-fase-4-contrato.md`. Un cambio posterior se anota aquí con fecha y motivo.
 
 | # | Decisión | Reglas |
 |---|---|---|
@@ -84,7 +84,19 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.4 y mod
 | **D-74** | **Exportación XLSX y CSV**: al momento, sin guardar archivos; hoja de parámetros; neutralización de fórmulas; máx. 100 000 filas; 10 por minuto por usuario; auditada (filtros y conteo, nunca datos). | RN-REP-05 |
 | **D-75** | **Tiempo real (SSE)**: eventos de invalidación sin datos personales; el cliente recarga por los endpoints con RBAC/RLS; canal por negocio; polling de respaldo. Perder un aviso no afecta la consistencia. | RN-RT-* |
 | **D-76** | **Kioscos**: `activated_at`, `last_seen_at`, estado del dispositivo y revocación inmediata; la cookie larga no da acceso sin la validación del servidor en cada petición. | RN-PIN-09 |
+| **D-78** | **Un solo día operativo para toda la asistencia** (ajusta D-27 y D-46 en lo que toca a asistencia). Mientras no llega la hora de corte del negocio/sucursal (política `operational_cutoff`, en su zona IANA efectiva; Fatboy: America/Tijuana, 05:00), todo pertenece al día operativo ANTERIOR: 02-oct 23:30 ⇒ 02-oct · 03-oct 01:30 ⇒ 02-oct · 03-oct 04:59:59 ⇒ 02-oct · 03-oct 05:00:00 ⇒ 03-oct. El **turno** pertenece al día operativo de su inicio (`shifts.operational_date`); una jornada ligada a un turno, al del turno; una jornada sin turno, al de su Entrada; la FALTA y las solicitudes, al de su turno o jornada. Aplica a asistencia en vivo, jornadas, incidencias, reconciliación, solicitudes y correcciones, reportes, exportaciones y todo filtro "hoy". **Nunca cambian los instantes reales**, solo la fecha con la que se agrupa y consulta. La hora de corte nunca está fija en el código. `business_date` queda solo como fecha de planeación (columna del horario semanal). | RN-ASI-11, RN-ASI-20, RN-RT-01, RN-REP-01 |
 | **D-77** | **Aislamiento SaaS** de todo recurso nuevo (tablas, endpoints, consultas, reportes, SSE, exportaciones): `organization_id` + FKs compuestas + RLS + verificación de catálogo + pruebas A↔B. | RN-ORG-* |
+
+## Decisiones técnicas de D-78 (día operativo canónico)
+
+- **Una sola definición:** `src/common/operational-day.ts` (`operationalDate`, `operationalDayWindow`, `cutoffInstant`, `firstCutoffAfter`). Una prueba de arquitectura falla si aparece otra definición o si asistencia/reportes vuelven a usar `businessDate`.
+- **Un solo calendario:** `PoliciesService.calendarTx` → `organizationCalendars` resuelve zona (sucursal → negocio) y corte (sucursal → negocio → plataforma) con la misma jerarquía de políticas (`resolvePolicy`). Filtra por `organization_id`, así que también lo usa el CLI de plataforma.
+- **Día operativo del turno guardado** (`scheduling.shifts.operational_date`, migración `0011`): se calcula al crear, editar, copiar o generar desde plantilla. `business_date` no cambia de significado (planeación: columna y semana del horario, D-27), para no mover turnos entre semanas/horarios publicados.
+- **PostgreSQL lo garantiza:** una jornada ligada tiene el día de su turno (`SESSION_DATE_MISMATCH`); una FALTA, el de su turno (`INCIDENT_DATE_MISMATCH`); una solicitud, el de su turno o jornada (`REQUEST_DATE_MISMATCH`, ahora contra `operational_date`).
+- **Un turno con jornada real no cambia de día operativo** (`SHIFT_HAS_ATTENDANCE`, igual que ya no cambiaba de empleado ni de sucursal): así nunca se reescriben jornadas ni incidencias históricas. Si un turno sin jornada cambia de día operativo, su FALTA abierta se anula (`SHIFT_RESCHEDULED`) y la reconciliación genera la correcta.
+- **Cambio de hora de corte o de zona:** recalcula el día operativo de los turnos que **aún no empiezan** (panel, CLI y cambio de zona de sucursal); lo ya ocurrido conserva su día (los cambios de política aplican hacia adelante). Las jornadas sin turno conservan el corte congelado en su snapshot.
+- **Migración `0011`:** rellena turnos con la gemela SQL `core.operational_date` (solo para migraciones; una prueba verifica que coincide con la función canónica en fronteras, DST y varias zonas) y alinea jornadas ligadas, sus incidencias, las FALTAS y las solicitudes. No modifica instantes.
+- **"Hoy" del panel:** `GET /api/attendance/today` (día operativo calculado por el servidor). Jornadas, Incidencias e historial ya no usan la fecha del navegador. La prueba E2E (51) vuelve a su forma original: con D-78 el tablero "hoy" muestra el turno también entre las 00:00 y el corte.
 
 ## Decisiones técnicas de la Fase 4 (internas; respetan el contrato)
 
@@ -102,7 +114,7 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.4 y mod
 - **"Revocar ahora"** reutiliza la revocación de token existente (`kiosk.token_revoked`): la credencial se valida en cada petición, así que no hace falta un mecanismo nuevo.
 - **Recargas traslapadas en pantallas en vivo:** con avisos SSE, polling y cambios de filtro pueden coincidir varias consultas; el tablero y la bandeja solo aplican la respuesta MÁS RECIENTE (una respuesta vieja nunca pisa una nueva) y la sucursal por defecto nunca reemplaza una elegida por el usuario.
 - **`/auth/me` incluye `employeeId`** (la ficha ligada a la membresía activa) para mostrar "Mis jornadas"; la autorización real sigue en el servidor (`NO_EMPLOYEE_RECORD`).
-- **Prueba E2E (51):** fija el día del turno en el tablero. Entre las 00:00 y la hora de corte, el día operativo "de hoy" todavía es el anterior y un turno que empezó después de medianoche pertenece al día de calendario siguiente; la prueba dependía de la hora de ejecución. No cambia ninguna regla (ver observación en el reporte de la fase).
+- **Prueba E2E (51):** dependía de la hora de ejecución (entre las 00:00 y el corte, el turno de madrugada caía en otro día que el tablero). Lo resolvió D-78; la prueba volvió a su forma original.
 
 ## Decisiones técnicas de la Fase 3 (para revisión)
 

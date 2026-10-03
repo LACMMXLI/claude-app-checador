@@ -3,6 +3,7 @@ import { DomainError, isPgError, raisedCode } from '../../common/errors.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
 import { effectiveTimezone } from '../../common/time.js';
+import { operationalDateIn } from '../../common/operational-day.js';
 import { addDaysToDate, type Fold, weekStartOf } from '../../common/zoned-time.js';
 import { branches, employeeBranchAssignments, employees, organizations, shifts, weeklySchedules } from '../../db/schema/index.js';
 import type { AuditService } from '../audit/audit.service.js';
@@ -80,6 +81,7 @@ export function shiftView(row: ShiftRow, scheduleStatus?: string) {
     branchId: row.branchId,
     employeeId: row.employeeId,
     businessDate: row.businessDate,
+    operationalDate: row.operationalDate,
     startsAt: row.startsAt,
     endsAt: row.endsAt,
     timezone: row.timezoneSnapshot,
@@ -343,7 +345,9 @@ export class SchedulingService {
     if (state !== 'FUTURE') this.assertHistoryAllowed(access, input.branchId, opts.reason, state);
     await this.assertNoOverlap(tx, access, input.employeeId, time.startsAt, time.endsAt, opts.excludeShiftId);
     const weekStart = weekStartOf(input.date, policy.weekStartDay);
-    return { branch, time, weekStart, state };
+    // D-78: día operativo del turno = el de su INICIO, con el calendario (zona + corte) de la sucursal
+    const operationalDate = operationalDateIn(time.startsAt, await this.policies.calendarTx(tx, ctx, input.branchId));
+    return { branch, time: { ...time, operationalDate }, weekStart, state };
   }
 
   async createShift(ctx: TenantContext, access: AccessProfile, input: ShiftInput, opts: { reason?: string; dryRun?: boolean } = {}) {
@@ -361,6 +365,7 @@ export class SchedulingService {
               branchId: input.branchId,
               employeeId: input.employeeId,
               businessDate: time.businessDate,
+              operationalDate: time.operationalDate,
               startsAt: time.startsAt,
               endsAt: time.endsAt,
               timezoneSnapshot: branch.timezone,
@@ -448,6 +453,7 @@ export class SchedulingService {
           branchId: target.branchId,
           scheduleId: schedule.id,
           businessDate: time.businessDate,
+          operationalDate: time.operationalDate,
           startsAt: time.startsAt,
           endsAt: time.endsAt,
           // la zona se re-captura solo cuando se recalculan los instantes (D-26)
@@ -474,7 +480,11 @@ export class SchedulingService {
       if (scheduleId !== before.scheduleId) await this.bumpSchedule(tx, scheduleId);
       // D-66: si el turno se reprogramó y ahora termina en el futuro, su FALTA abierta deja de tener sentido: queda ANULADA
       // por el sistema (nunca borrada). Cancelar o reasignar lo hace un trigger de PostgreSQL en la misma transacción.
-      if (after.endsAt.getTime() > now.getTime() && after.endsAt.getTime() !== before.endsAt.getTime()) {
+      // D-78: también si cambió su día operativo (la reconciliación la vuelve a generar con el día correcto si aplica).
+      if (
+        (after.endsAt.getTime() > now.getTime() && after.endsAt.getTime() !== before.endsAt.getTime()) ||
+        after.operationalDate !== before.operationalDate
+      ) {
         const voided = await resolveIncidents(tx, ctx, { shiftId, types: ['FALTA'] }, { resolution: 'VOIDED', reason: 'SHIFT_RESCHEDULED', at: now });
         for (const v of voided) {
           await this.audit.record(tx, { ...ctx, actor: { ...ctx.actor, type: 'SYSTEM' } }, {
@@ -605,6 +615,7 @@ export class SchedulingService {
                   branchId: params.branchId,
                   employeeId: c.employeeId,
                   businessDate: time.businessDate,
+                  operationalDate: time.operationalDate,
                   startsAt: time.startsAt,
                   endsAt: time.endsAt,
                   timezoneSnapshot: branch.timezone,

@@ -143,8 +143,6 @@ test('(51) administrativo: turno publicado → Entrada tardía → tablero → c
   await page.getByRole('link', { name: 'Asistencia en vivo' }).click();
   await expect(page.getByRole('heading', { name: 'Asistencia en vivo' })).toBeVisible();
   await page.getByLabel('Sucursal').selectOption({ label: 'Venecia' });
-  // el día del turno (entre las 00:00 y la hora de corte, el día operativo "de hoy" todavía es el anterior)
-  await page.getByLabel('Día operativo').fill(s.date);
   const row = page.getByTestId(`live-row-${beto.id}`);
   await expect(row).toContainText('Trabajando');
   await expect(row.getByTestId('arrival')).toHaveText(/^\+2[01] min$/);

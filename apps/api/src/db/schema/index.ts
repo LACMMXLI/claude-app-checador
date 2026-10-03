@@ -318,7 +318,10 @@ export const shifts = scheduling.table('shifts', {
   scheduleId: uuid('schedule_id').notNull(),
   branchId: uuid('branch_id').notNull(),
   employeeId: uuid('employee_id').notNull(),
+  /** Fecha de PLANEACIÓN (columna del horario semanal, D-27). La asistencia nunca la usa. */
   businessDate: date('business_date', { mode: 'string' }).notNull(),
+  /** D-78 · Día operativo del inicio del turno (función canónica `operationalDate`). Lo usa toda la asistencia. */
+  operationalDate: date('operational_date', { mode: 'string' }).notNull(),
   startsAt: tstz('starts_at').notNull(),
   endsAt: tstz('ends_at').notNull(),
   timezoneSnapshot: text('timezone_snapshot').notNull(),

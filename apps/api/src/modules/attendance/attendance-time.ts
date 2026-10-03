@@ -2,48 +2,14 @@
  * Reglas PURAS de tiempo de la asistencia (RN-CAL-06): sin base de datos, con pruebas propias.
  * Todo instante es UTC; la zona IANA efectiva de la sucursal solo interpreta (D-1, D-46). Nunca offsets fijos.
  */
-import { addDaysToDate, localCandidates, toLocal } from '../../common/zoned-time.js';
 
 /** Minutos completos entre dos instantes, truncando los segundos de cada uno (RN §9). Con signo. */
 export function minutesBetween(a: Date, b: Date): number {
   return Math.floor(b.getTime() / 60_000) - Math.floor(a.getTime() / 60_000);
 }
 
-const hhmm = (time: string): string => time.slice(0, 5);
-
-function addMinutesToLocalTime(time: string, minutes: number): string {
-  const total = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) + minutes;
-  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
-/**
- * Instante en que ocurre la hora de corte (`HH:MM[:SS]`) del día local `date`. Si esa hora no existe
- * por un cambio de horario se usa el primer minuto válido posterior; si ocurre dos veces, la primera.
- */
-export function cutoffInstant(date: string, cutoff: string, timezone: string): Date {
-  const time = hhmm(cutoff);
-  for (let shift = 0; shift <= 180; shift += 1) {
-    const candidates = localCandidates(date, addMinutesToLocalTime(time, shift), timezone);
-    if (candidates.length) return candidates[0]!;
-  }
-  throw new Error(`No se pudo ubicar el corte ${cutoff} del ${date} en ${timezone}`);
-}
-
-/**
- * D-46 · Día operativo de un instante SIN turno: antes de la hora de corte local pertenece al día anterior.
- * Corte 05:00 → 3-oct 03:30 ⇒ 2-oct · 3-oct 05:15 ⇒ 3-oct.
- */
-export function operationalDate(instant: Date, timezone: string, cutoff: string): string {
-  const local = toLocal(instant, timezone);
-  return local.time < hhmm(cutoff) ? addDaysToDate(local.date, -1) : local.date;
-}
-
-/** Primer corte operativo ESTRICTAMENTE posterior a un instante (D-47: turno 19:00–03:00, corte 05:00 ⇒ 05:00). */
-export function firstCutoffAfter(instant: Date, timezone: string, cutoff: string): Date {
-  const date = toLocal(instant, timezone).date;
-  const sameDay = cutoffInstant(date, cutoff, timezone);
-  return sameDay.getTime() > instant.getTime() ? sameDay : cutoffInstant(addDaysToDate(date, 1), cutoff, timezone);
-}
+// D-46/D-78: el día operativo tiene UNA sola definición, en `src/common/operational-day.ts`.
+export { cutoffInstant, firstCutoffAfter, operationalDate } from '../../common/operational-day.js';
 
 /**
  * D-43 · Estado de llegada de un turno publicado SIN Entrada (derivado, nunca guardado):

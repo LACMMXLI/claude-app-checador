@@ -22,7 +22,8 @@ import {
   shiftsInWindow,
   snapshotOf,
 } from './attendance-common.js';
-import { isLate, minutesBetween, operationalDate } from './attendance-time.js';
+import { isLate, minutesBetween } from './attendance-time.js';
+import { operationalDateIn } from '../../common/operational-day.js';
 import type { KioskTickets } from './kiosk-ticket.js';
 import type { ReconcilerService } from './reconciler.service.js';
 import type { CorrectionRequestsService, NewRequestInput } from './correction-requests.service.js';
@@ -269,7 +270,8 @@ export class KioskAttendanceService {
     const branch = await loadBranch(tx, device.branchId);
     if (!branch.isActive) throw new DomainError('BRANCH_INACTIVE');
     const [shift] = await shiftsInWindow(tx, employeeId, { id: device.branchId }, now, policy.earlyEntryWindowMin);
-    const opDate = shift ? shift.businessDate : operationalDate(now, branch.timezone, policy.operationalCutoff);
+    // D-78: con turno, el día operativo del turno; sin turno, el de la Entrada (calendario de la sucursal)
+    const opDate = shift ? shift.operationalDate : operationalDateIn(now, await this.policies.calendarTx(tx, ctx, device.branchId));
     const [session] = await tx
       .insert(workSessions)
       .values({

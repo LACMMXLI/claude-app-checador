@@ -17,7 +17,8 @@ import {
   weeklySchedules,
   workSessions,
 } from '../../db/schema/index.js';
-import { minutesBetween, operationalDate, sessionMetrics } from '../attendance/attendance-time.js';
+import { minutesBetween, sessionMetrics } from '../attendance/attendance-time.js';
+import { operationalDateIn } from '../../common/operational-day.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type { AccessProfile } from '../auth/rbac.service.js';
 import type { PoliciesService } from '../policies/policies.service.js';
@@ -111,16 +112,10 @@ export class ReportsService {
     });
   }
 
+  /** "Hoy" = día operativo (D-78) de la sucursal o, si son todas, del negocio. */
   private async today(tx: Tx, ctx: TenantContext, branchId?: string) {
-    const [org] = await tx.select({ tz: organizations.timezone }).from(organizations);
-    let timezone = org!.tz;
-    if (branchId) {
-      const [b] = await tx.select({ tz: branches.timezone }).from(branches).where(eq(branches.id, branchId));
-      if (!b) throw new DomainError('BRANCH_NOT_FOUND');
-      timezone = effectiveTimezone(b.tz, org!.tz);
-    }
-    const { policy } = await this.policies.getEffectiveTx(tx, ctx, { branchId });
-    return { today: operationalDate(this.clock(), timezone, policy.operationalCutoff), timezone };
+    const calendar = await this.policies.calendarTx(tx, ctx, branchId);
+    return { today: operationalDateIn(this.clock(), calendar), timezone: calendar.timezone };
   }
 
   /** Genera el reporte. `permission` = 'reports.export' para exportaciones (alcance de exportación). */
@@ -229,7 +224,7 @@ export class ReportsService {
         .select({ s: shifts })
         .from(shifts)
         .innerJoin(weeklySchedules, eq(weeklySchedules.id, shifts.scheduleId))
-        .where(and(eq(shifts.status, 'SCHEDULED'), eq(weeklySchedules.status, 'PUBLISHED'), gte(shifts.businessDate, from), lte(shifts.businessDate, to), inScope(shifts.branchId), byEmployee(shifts.employeeId)))
+        .where(and(eq(shifts.status, 'SCHEDULED'), eq(weeklySchedules.status, 'PUBLISHED'), gte(shifts.operationalDate, from), lte(shifts.operationalDate, to), inScope(shifts.branchId), byEmployee(shifts.employeeId)))
     ).map((r) => r.s);
     const sessions = await tx
       .select()

@@ -247,6 +247,8 @@ test('(56) reportes con periodo rápido y descarga XLSX/CSV', async ({ page, bro
   await page.getByTestId('report-period').selectOption({ label: 'Hoy' });
   // "Hoy" es el DÍA OPERATIVO del negocio (zona + hora de corte), no la fecha del calendario
   const { today } = await (await page.request.get('/api/reports/periods')).json();
+  // D-78: el "hoy" de reportes y el de los filtros de asistencia son el mismo día operativo (calculado en el servidor)
+  expect((await (await page.request.get('/api/attendance/today')).json()).today).toBe(today);
   await expect(page.getByTestId('report-range')).toContainText(today);
   await page.getByTestId('report-run').click();
   await expect(page.getByTestId('report-table')).toContainText(gina.lastName);
