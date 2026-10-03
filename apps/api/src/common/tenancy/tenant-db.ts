@@ -33,6 +33,25 @@ export class TenantDb {
     });
   }
 
+  /**
+   * Lectura consistente (reportes, D-73): `REPEATABLE READ` + solo lectura, para que los totales de un reporte salgan
+   * de una misma foto de los datos. Mismo contexto de negocio y RLS que `run`.
+   */
+  async runReadOnly<T>(ctx: TenantContext, fn: (tx: Tx) => Promise<T>): Promise<T> {
+    if (!isUuid(ctx.organizationId)) throw new Error('organizationId inválido');
+    const userId = ctx.actor.userId ?? '';
+    if (userId !== '' && !isUuid(userId)) throw new Error('userId inválido');
+    return this.db.transaction(
+      async (tx) => {
+        await tx.execute(
+          sql`select set_config('app.organization_id', ${ctx.organizationId}, true), set_config('app.user_id', ${userId}, true)`,
+        );
+        return fn(tx);
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
+  }
+
   /** Operación de un usuario autenticado SIN negocio seleccionado (p. ej. listar sus negocios al iniciar sesión). */
   async runAsUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
     if (!isUuid(userId)) throw new Error('userId inválido');

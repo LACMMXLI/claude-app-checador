@@ -1,8 +1,10 @@
 import type { Pool } from 'pg';
+import { NotificationHub } from './common/realtime/notification-hub.js';
 import { Gate } from './common/tenancy/gate.js';
 import { TenantDb } from './common/tenancy/tenant-db.js';
 import { AuditQueryService } from './modules/audit/audit-query.service.js';
 import { AuditService } from './modules/audit/audit.service.js';
+import { ReportsService } from './modules/reports/reports.service.js';
 import { AuthService } from './modules/auth/auth.service.js';
 import { InvitationsService } from './modules/auth/invitations.service.js';
 import { SessionsService } from './modules/auth/sessions.service.js';
@@ -73,6 +75,9 @@ export function createContainer(options: ContainerOptions) {
     corrections,
     correctionRequests,
     attendanceQuery: new AttendanceQueryService(tenantDb, policies, options.clock),
+    reports: new ReportsService(tenantDb, policies, audit, options.clock),
+    // Avisos de cambio para SSE (D-75): LISTEN por negocio sobre una conexión del pool de app_user
+    notifications: new NotificationHub(options.appPool),
   };
 }
 export type Container = ReturnType<typeof createContainer>;

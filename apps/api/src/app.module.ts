@@ -1,4 +1,4 @@
-import { type DynamicModule, type INestApplication, Module } from '@nestjs/common';
+import { type DynamicModule, type INestApplication, Inject, Injectable, Module, type OnModuleDestroy } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import type { Pool } from 'pg';
@@ -8,6 +8,8 @@ import { AuthController } from './http/controllers/auth.controller.js';
 import { BranchesController } from './http/controllers/branches.controller.js';
 import { EmployeesController } from './http/controllers/employees.controller.js';
 import { AttendanceController } from './http/controllers/attendance.controller.js';
+import { RealtimeController } from './http/controllers/realtime.controller.js';
+import { ReportsController } from './http/controllers/reports.controller.js';
 import { KioskDeviceController } from './http/controllers/kiosk-device.controller.js';
 import { KiosksController } from './http/controllers/kiosks.controller.js';
 import { MembersController } from './http/controllers/members.controller.js';
@@ -23,6 +25,15 @@ export interface AppOptions {
   pool: Pool;
   container: Container;
   http: HttpConfig;
+}
+
+/** Al cerrar la app se libera la conexión LISTEN del tiempo real. */
+@Injectable()
+class RealtimeShutdown implements OnModuleDestroy {
+  constructor(@Inject(CONTAINER) private readonly c: Container) {}
+  onModuleDestroy() {
+    return this.c.notifications.close();
+  }
 }
 
 @Module({})
@@ -42,6 +53,8 @@ export class AppModule {
         AuditController,
         SchedulesController,
         AttendanceController,
+        RealtimeController,
+    ReportsController,
       ],
       providers: [
         { provide: PG_POOL, useValue: options.pool },
@@ -49,6 +62,7 @@ export class AppModule {
         { provide: HTTP_CONFIG, useValue: options.http },
         { provide: HEALTH_CHECK, useValue: async () => (await options.pool.query('SELECT 1')).rowCount === 1 },
         RequestAuth,
+        RealtimeShutdown,
       ],
     };
   }

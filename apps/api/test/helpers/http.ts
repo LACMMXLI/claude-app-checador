@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
 import { createHttpApp } from '../../src/app.module.js';
 import type { Container } from '../../src/container.js';
+import type { HttpConfig } from '../../src/http/tokens.js';
 import type { Pools } from './world.js';
 
 export interface TestServer {
@@ -10,8 +11,8 @@ export interface TestServer {
   close(): Promise<void>;
 }
 
-export async function startServer(pools: Pools, container: Container, secureCookies = false): Promise<TestServer> {
-  const app = await createHttpApp({ pool: pools.app, container, http: { secureCookies } }, false);
+export async function startServer(pools: Pools, container: Container, secureCookies = false, http: Partial<HttpConfig> = {}): Promise<TestServer> {
+  const app = await createHttpApp({ pool: pools.app, container, http: { secureCookies, ...http } }, false);
   await app.listen(0, '127.0.0.1');
   const { port } = app.getHttpServer().address() as AddressInfo;
   return { app, baseUrl: `http://127.0.0.1:${port}`, close: () => app.close() };
@@ -47,6 +48,15 @@ export class Agent {
     }
     const text = await res.text();
     return { status: res.status, body: text ? JSON.parse(text) : null, headers: res.headers };
+  }
+
+  /** Petición con la sesión del agente que devuelve la respuesta SIN leer (descargas binarias). */
+  raw(method: string, path: string, body?: unknown): Promise<Response> {
+    const h: Record<string, string> = {};
+    if (method !== 'GET') h['x-requested-with'] = 'checador';
+    if (body !== undefined) h['content-type'] = 'application/json';
+    if (this.cookies.size) h.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
+    return fetch(`${this.baseUrl}${path}`, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
   }
 
   get<T = any>(path: string, headers?: Record<string, string>) { return this.request<T>('GET', path, undefined, headers); }

@@ -5,7 +5,18 @@ export const HTTP_CONFIG = Symbol('HTTP_CONFIG');
 export interface HttpConfig {
   /** `true` en producción: cookie `Secure` con prefijo `__Host-` (solo HTTPS, sin Domain, Path=/). */
   secureCookies: boolean;
+  /** Tiempos del SSE (D-75); configurables para pruebas. */
+  sse?: Partial<SseConfig>;
 }
+
+export interface SseConfig {
+  pingMs: number;
+  revalidateMs: number;
+  maxLifetimeMs: number;
+  maxPerUser: number;
+}
+
+export const SSE_DEFAULTS: SseConfig = { pingMs: 25_000, revalidateMs: 60_000, maxLifetimeMs: 30 * 60_000, maxPerUser: 5 };
 
 export const sessionCookieName = (cfg: HttpConfig) => (cfg.secureCookies ? '__Host-sid' : 'sid');
 /** Credencial del navegador del kiosco (D-56): HttpOnly, nunca en localStorage. */

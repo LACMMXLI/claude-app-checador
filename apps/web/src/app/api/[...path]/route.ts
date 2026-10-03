@@ -24,6 +24,7 @@ async function proxy(req: Request, ctx: { params: Promise<{ path: string[] }> })
       headers,
       body: ['GET', 'HEAD'].includes(req.method) ? undefined : await req.arrayBuffer(),
       redirect: 'manual',
+      signal: req.signal, // si el navegador se desconecta (p. ej. SSE), se corta también hacia la API
     });
   } catch {
     return Response.json({ error: { code: 'API_UNAVAILABLE', details: {} } }, { status: 502, headers: { 'cache-control': 'no-store' } });
@@ -33,6 +34,15 @@ async function proxy(req: Request, ctx: { params: Promise<{ path: string[] }> })
   if (type) out.set('content-type', type);
   for (const c of res.headers.getSetCookie()) out.append('set-cookie', c);
   out.set('cache-control', 'no-store');
+  // SSE (D-75): se reenvía en STREAMING, sin acumular la respuesta (y se pide lo mismo a cualquier proxy delante)
+  if (type?.startsWith('text/event-stream')) {
+    out.set('cache-control', 'no-cache, no-transform');
+    out.set('x-accel-buffering', 'no');
+    return new Response(res.body, { status: res.status, headers: out });
+  }
+  // descargas de reportes (D-74): conservar el nombre del archivo
+  const disposition = res.headers.get('content-disposition');
+  if (disposition) out.set('content-disposition', disposition);
   return new Response(res.status === 204 ? null : await res.arrayBuffer(), { status: res.status, headers: out });
 }
 
