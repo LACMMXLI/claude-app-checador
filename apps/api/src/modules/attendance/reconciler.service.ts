@@ -1,4 +1,5 @@
 import { and, eq, lte, sql } from 'drizzle-orm';
+import { raisedCode } from '../../common/errors.js';
 import type { Gate } from '../../common/tenancy/gate.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
@@ -69,12 +70,21 @@ export class ReconcilerService {
             lte(shifts.endsAt, now),
             sql`EXISTS (SELECT 1 FROM scheduling.weekly_schedules w WHERE w.id = ${shifts.scheduleId} AND w.status = 'PUBLISHED')`,
             sql`NOT EXISTS (SELECT 1 FROM attendance.work_sessions ws WHERE ws.shift_id = ${shifts.id})`,
-            sql`NOT EXISTS (SELECT 1 FROM attendance.incidents i WHERE i.shift_id = ${shifts.id} AND i.type = 'FALTA')`,
+            // una FALTA anulada (D-66) no impide la que corresponda ahora (p. ej. turno reasignado o reprogramado)
+            sql`NOT EXISTS (SELECT 1 FROM attendance.incidents i WHERE i.shift_id = ${shifts.id} AND i.type = 'FALTA' AND (i.resolution IS NULL OR i.resolution <> 'VOIDED'))`,
           ),
         );
       for (const shift of missed) {
-        const incident = await openIncident(
-          tx,
+        // Bloquea el turno y revalida: si en paralelo se canceló o reasignó, no se crea la falta (D-66). La guarda de la BD
+        // (FALTA_NOT_APPLICABLE) es la última barrera; un savepoint evita que un turno invalide toda la reconciliación.
+        const [still] = await tx
+          .select({ id: shifts.id })
+          .from(shifts)
+          .where(and(eq(shifts.id, shift.id), eq(shifts.status, 'SCHEDULED'), eq(shifts.employeeId, shift.employeeId), eq(shifts.branchId, shift.branchId)))
+          .for('share');
+        if (!still) continue;
+        const incident = await tx.transaction((sp) => openIncident(
+          sp,
           ctx,
           {
             type: 'FALTA',
@@ -86,7 +96,10 @@ export class ReconcilerService {
           },
           'RECONCILER',
           now,
-        );
+        )).catch((error: unknown) => {
+          if (raisedCode(error) === 'FALTA_NOT_APPLICABLE') return null;
+          throw error;
+        });
         if (!incident) continue;
         result.absences += 1;
         await this.audit.record(tx, ctx, {

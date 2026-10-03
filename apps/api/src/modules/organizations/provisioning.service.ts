@@ -30,6 +30,7 @@ export const ENCARGADO_PERMISSIONS = [
   'schedules.manage',
   'attendance.view',
   'attendance.correction.apply',
+  'attendance.correction.request', // Fase 4 (decisión 6): solicitar correcciones de su PROPIA ficha; nunca aprobarlas
   'incidents.resolve',
   'reports.view',
   'reports.export',

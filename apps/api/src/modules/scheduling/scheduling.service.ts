@@ -8,6 +8,7 @@ import { branches, employeeBranchAssignments, employees, organizations, shifts, 
 import type { AuditService } from '../audit/audit.service.js';
 import type { AccessProfile } from '../auth/rbac.service.js';
 import type { PoliciesService } from '../policies/policies.service.js';
+import { resolveIncidents } from '../attendance/attendance-common.js';
 import { assertDuration, localView, resolveShiftTime, temporalState } from './shift-time.js';
 
 type ShiftRow = typeof shifts.$inferSelect;
@@ -471,6 +472,22 @@ export class SchedulingService {
       if (!after) throw new DomainError('SHIFT_VERSION_CONFLICT');
       await this.bumpSchedule(tx, before.scheduleId);
       if (scheduleId !== before.scheduleId) await this.bumpSchedule(tx, scheduleId);
+      // D-66: si el turno se reprogramó y ahora termina en el futuro, su FALTA abierta deja de tener sentido: queda ANULADA
+      // por el sistema (nunca borrada). Cancelar o reasignar lo hace un trigger de PostgreSQL en la misma transacción.
+      if (after.endsAt.getTime() > now.getTime() && after.endsAt.getTime() !== before.endsAt.getTime()) {
+        const voided = await resolveIncidents(tx, ctx, { shiftId, types: ['FALTA'] }, { resolution: 'VOIDED', reason: 'SHIFT_RESCHEDULED', at: now });
+        for (const v of voided) {
+          await this.audit.record(tx, { ...ctx, actor: { ...ctx.actor, type: 'SYSTEM' } }, {
+            action: 'attendance.incident_voided',
+            entityType: 'incident',
+            entityId: v.id,
+            branchId: v.branchId,
+            before: { type: 'FALTA', status: 'OPEN' },
+            after: { type: 'FALTA', status: 'RESOLVED', resolution: 'VOIDED', shiftId },
+            reason: 'SHIFT_RESCHEDULED',
+          });
+        }
+      }
       await this.audit.record(tx, ctx, {
         action: stateBefore === 'FUTURE' ? 'shift.updated' : 'shift.history_corrected',
         entityType: 'shift',

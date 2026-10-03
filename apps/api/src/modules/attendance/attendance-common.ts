@@ -35,7 +35,9 @@ export type IncidentType =
   | 'SALIDA_OLVIDADA'
   | 'JORNADA_ABIERTA_EXCEDIDA'
   | 'REGRESO_COMIDA_FALTANTE'
-  | 'COMIDA_EXCEDIDA';
+  | 'COMIDA_EXCEDIDA'
+  | 'SALIDA_ANTICIPADA'
+  | 'SIN_COMIDA';
 
 /** Incidencias que significan "esta jornada requiere corrección" (D-47, D-48, D-50). */
 export const REVIEW_INCIDENTS: readonly IncidentType[] = ['SALIDA_OLVIDADA', 'JORNADA_ABIERTA_EXCEDIDA', 'REGRESO_COMIDA_FALTANTE'];
@@ -51,6 +53,9 @@ export interface PolicySnapshot {
   maxBreaks: number;
   breakAllowedMin: number;
   breakToleranceMin: number;
+  /** Fase 4 (precisión D): la jornada congela todo lo necesario para recalcular sus reglas después. */
+  requireBreak: boolean;
+  breakRequiredAfterMin: number;
 }
 
 export const snapshotOf = (p: EffectivePolicy): PolicySnapshot => ({
@@ -63,6 +68,8 @@ export const snapshotOf = (p: EffectivePolicy): PolicySnapshot => ({
   maxBreaks: p.maxBreaks,
   breakAllowedMin: p.breakAllowedMin,
   breakToleranceMin: p.breakToleranceMin,
+  requireBreak: p.requireBreak,
+  breakRequiredAfterMin: p.breakRequiredAfterMin,
 });
 
 export async function loadBranch(tx: Tx, branchId: string) {
@@ -211,7 +218,7 @@ export async function resolveIncidents(
   tx: Tx,
   ctx: TenantContext,
   where: { workSessionId?: string; shiftId?: string; types: readonly IncidentType[] },
-  resolution: { resolution: 'CORRECTED' | 'JUSTIFIED' | 'CONFIRMED' | 'DISMISSED'; reason: string; at: Date; correctionId?: string | null },
+  resolution: { resolution: 'CORRECTED' | 'JUSTIFIED' | 'CONFIRMED' | 'DISMISSED' | 'VOIDED'; reason: string; at: Date; correctionId?: string | null },
 ): Promise<IncidentRow[]> {
   if (where.types.length === 0) return [];
   return tx
@@ -223,6 +230,8 @@ export async function resolveIncidents(
       resolvedBy: ctx.actor.userId ?? null,
       resolutionReason: resolution.reason,
       resolutionCorrectionId: resolution.correctionId ?? null,
+      // origen de la resolución (D-66): VOIDED solo el sistema; CORRECTED solo una corrección; el resto, una persona
+      resolutionSource: resolution.resolution === 'VOIDED' ? 'SYSTEM' : resolution.resolution === 'CORRECTED' ? 'CORRECTION' : 'USER',
       version: sql`${incidents.version} + 1`,
     })
     .where(

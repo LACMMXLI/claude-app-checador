@@ -17,6 +17,7 @@ import { SchedulingService } from './modules/scheduling/scheduling.service.js';
 import { TemplatesService } from './modules/scheduling/templates.service.js';
 import { AttendanceQueryService } from './modules/attendance/attendance-query.service.js';
 import { CorrectionsService } from './modules/attendance/corrections.service.js';
+import { CorrectionRequestsService } from './modules/attendance/correction-requests.service.js';
 import { KioskAttendanceService } from './modules/attendance/kiosk-attendance.service.js';
 import { KioskTickets } from './modules/attendance/kiosk-ticket.js';
 import { ReconcilerService } from './modules/attendance/reconciler.service.js';
@@ -47,6 +48,8 @@ export function createContainer(options: ContainerOptions) {
   const scheduling = new SchedulingService(tenantDb, audit, policies, options.clock);
   const kioskIdentification = new KioskIdentificationService(tenantDb, employees, policies, audit, options.clock);
   const reconciler = new ReconcilerService(tenantDb, gate, audit, policies, options.clock);
+  const corrections = new CorrectionsService(tenantDb, audit, policies, options.clock);
+  const correctionRequests = new CorrectionRequestsService(tenantDb, audit, policies, corrections, options.clock);
   return {
     tenantDb,
     gate,
@@ -66,8 +69,9 @@ export function createContainer(options: ContainerOptions) {
     kioskIdentification,
     reconciler,
     // El pase corto del kiosco se firma con una clave DERIVADA del secreto del servidor (separación de dominio).
-    kioskAttendance: new KioskAttendanceService(tenantDb, audit, policies, kioskIdentification, reconciler, new KioskTickets(options.pinPepper), options.clock),
-    corrections: new CorrectionsService(tenantDb, audit, policies, options.clock),
+    kioskAttendance: new KioskAttendanceService(tenantDb, audit, policies, kioskIdentification, reconciler, new KioskTickets(options.pinPepper), correctionRequests, options.clock),
+    corrections,
+    correctionRequests,
     attendanceQuery: new AttendanceQueryService(tenantDb, policies, options.clock),
   };
 }

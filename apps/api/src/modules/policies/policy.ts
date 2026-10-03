@@ -40,6 +40,9 @@ export const POLICY_PARAMS = {
   weekStartDay: { schema: int(1, 7), scopes: ORG_ONLY },
   shiftMinMinutes: { schema: int(15, 1440), scopes: UP_TO_BRANCH },
   shiftMaxMinutes: { schema: int(15, 1440), scopes: UP_TO_BRANCH },
+  breakRequiredAfterMin: { schema: int(0, 1440), scopes: ALL },
+  correctionRequestWindowDays: { schema: int(1, 31), scopes: UP_TO_BRANCH },
+  maxPendingCorrectionRequests: { schema: int(1, 20), scopes: ORG_ONLY },
 } as const satisfies Record<string, ParamDef>;
 
 export type PolicyKey = keyof typeof POLICY_PARAMS;
@@ -64,6 +67,12 @@ export interface EffectivePolicy {
   weekStartDay: number;
   shiftMinMinutes: number;
   shiftMaxMinutes: number;
+  /** D-68: SIN_COMIDA solo si la jornada real dura al menos esto (0 = siempre que `requireBreak`). */
+  breakRequiredAfterMin: number;
+  /** D-70: días operativos hacia atrás en los que el empleado puede solicitar una corrección. */
+  correctionRequestWindowDays: number;
+  /** D-70: máximo de solicitudes PENDIENTES por empleado. */
+  maxPendingCorrectionRequests: number;
 }
 
 /** Un nivel de la jerarquía: solo los parámetros sobrescritos (los ausentes/null heredan). */

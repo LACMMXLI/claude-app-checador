@@ -25,6 +25,8 @@ import {
 import { isLate, minutesBetween, operationalDate } from './attendance-time.js';
 import type { KioskTickets } from './kiosk-ticket.js';
 import type { ReconcilerService } from './reconciler.service.js';
+import type { CorrectionRequestsService, NewRequestInput } from './correction-requests.service.js';
+import { syncDerivedIncidents } from './session-rules.js';
 
 export interface KioskDevice {
   deviceId: string;
@@ -67,8 +69,37 @@ export class KioskAttendanceService {
     private readonly identification: KioskIdentificationService,
     private readonly reconciler: ReconcilerService,
     private readonly tickets: KioskTickets,
+    private readonly requests: CorrectionRequestsService,
     private readonly clock: () => Date = () => new Date(),
   ) {}
+
+  /** Empleado del pase (solo para ESTE negocio y ESTE dispositivo) + un pase renovado mientras la pantalla siga en uso. */
+  private employeeFromTicket(ctx: TenantContext, device: KioskDevice, ticket: string) {
+    const deviceId = ctx.actor.deviceId;
+    if (ctx.actor.type !== 'KIOSK' || !deviceId || deviceId !== device.deviceId) throw new DomainError('KIOSK_CONTEXT_REQUIRED');
+    const now = this.clock();
+    const employeeId = this.tickets.verify(ticket, { organizationId: ctx.organizationId, deviceId }, now);
+    const renewed = this.tickets.issue({ organizationId: ctx.organizationId, deviceId, employeeId }, now);
+    return { employeeId, renewed };
+  }
+
+  /** "Mis registros" (D-70, precisión G): solo la propia ficha, solo la ventana de solicitud, datos mínimos. */
+  async myRecords(ctx: TenantContext, device: KioskDevice, ticket: string) {
+    const { employeeId, renewed } = this.employeeFromTicket(ctx, device, ticket);
+    return { ticket: renewed.ticket, ticketExpiresAt: renewed.expiresAt, ...(await this.requests.ownRecords(ctx, employeeId, device.branchId)) };
+  }
+
+  async requestCorrection(ctx: TenantContext, device: KioskDevice, ticket: string, input: NewRequestInput) {
+    const { employeeId, renewed } = this.employeeFromTicket(ctx, device, ticket);
+    const result = await this.requests.create(ctx, { channel: 'KIOSK', deviceId: device.deviceId }, employeeId, input);
+    return { ticket: renewed.ticket, ...result };
+  }
+
+  async cancelRequest(ctx: TenantContext, device: KioskDevice, ticket: string, requestId: string) {
+    const { employeeId, renewed } = this.employeeFromTicket(ctx, device, ticket);
+    const request = await this.requests.cancel(ctx, { channel: 'KIOSK', deviceId: device.deviceId }, employeeId, requestId);
+    return { ticket: renewed.ticket, request };
+  }
 
   private policy(tx: Tx, ctx: TenantContext, branchId: string, employeeId: string): Promise<EffectivePolicy> {
     return this.policies.getEffectiveTx(tx, ctx, { branchId, employeeId }).then((r) => r.policy);
@@ -349,6 +380,8 @@ export class KioskAttendanceService {
       .returning();
     if (!closed) throw new DomainError('NO_OPEN_SESSION');
     const event = await this.recordEvent(b, 'CLOCK_OUT', session.id);
+    // D-67 / D-68: al cerrar se evalúan salida anticipada y sin comida (con el snapshot de la jornada)
+    await syncDerivedIncidents(b.tx, b.ctx, session.id, b.now, { detectedBy: 'KIOSK', currentPolicy: () => this.policy(b.tx, b.ctx, session.branchId, session.employeeId) });
     const shift: ShiftRow | null = await loadShift(b.tx, session.shiftId);
     const elapsedMinutes = minutesBetween(session.startedAt, b.now);
     await this.audit.record(b.tx, b.ctx, { action: 'attendance.clock_out', entityType: 'work_session', entityId: session.id, branchId: session.branchId, before: { status: 'OPEN' }, after: { eventId: event.id, status: 'CLOSED', endedAt: b.now, elapsedMinutes } });

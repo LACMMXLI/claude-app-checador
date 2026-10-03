@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { DomainError } from '../../common/errors.js';
 import type { Container } from '../../container.js';
 import { PUNCH_ACTIONS } from '../../modules/attendance/attendance-common.js';
+import { REQUEST_ACTIONS, type RequestAction } from '../../modules/attendance/correction-requests.service.js';
 import type { KioskIdentity } from '../../modules/auth/kiosk-devices.service.js';
 import { readCookie } from '../request-auth.js';
 import { CONTAINER, HTTP_CONFIG, type HttpConfig, kioskCookieName } from '../tokens.js';
@@ -11,6 +12,21 @@ import { parse } from '../validation.js';
 
 const activateSchema = z.object({ credential: z.string().trim().min(6).max(200), deviceName: z.string().trim().min(1).max(80).optional() });
 const identifySchema = z.object({ pin: z.string().max(12) });
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const localInstant = z.object({ date, time, fold: z.enum(['EARLIER', 'LATER']).optional() });
+const ticketSchema = z.object({ ticket: z.string().min(10).max(1000) });
+const requestSchema = z.object({
+  ticket: z.string().min(10).max(1000),
+  clientRequestId: z.string().uuid(),
+  action: z.enum(REQUEST_ACTIONS as unknown as [string, ...string[]]),
+  workSessionId: z.string().uuid().nullish(),
+  breakId: z.string().uuid().nullish(),
+  shiftId: z.string().uuid().nullish(),
+  start: localInstant,
+  end: localInstant.nullish(),
+  reason: z.string().max(500),
+});
 const punchSchema = z.object({
   ticket: z.string().min(10).max(1000),
   action: z.enum(PUNCH_ACTIONS as unknown as [string, ...string[]]),
@@ -109,5 +125,34 @@ export class KioskDeviceController {
     const ctx = this.c.kiosks.contextFor(identity, { ip: req.ip });
     const input = parse(punchSchema, body);
     return this.c.kioskAttendance.punch(ctx, identity, { ...input, action: input.action as (typeof PUNCH_ACTIONS)[number] });
+  }
+
+  /** "Mis registros": solo la propia ficha (identificada por el pase), solo la ventana de solicitud, datos mínimos. */
+  @Post('my-records')
+  @HttpCode(200)
+  async myRecords(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
+    const identity = await this.device(req, res);
+    return this.c.kioskAttendance.myRecords(this.c.kiosks.contextFor(identity, { ip: req.ip }), identity, parse(ticketSchema, body).ticket);
+  }
+
+  /** Solicitar una corrección (D-70): nunca modifica la jornada; queda PENDIENTE de aprobación. Idempotente. */
+  @Post('correction-requests')
+  @HttpCode(200)
+  async requestCorrection(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
+    const identity = await this.device(req, res);
+    const { ticket, ...input } = parse(requestSchema, body);
+    // la sucursal de una jornada no registrada sin turno es la del kiosco (donde está físicamente el empleado)
+    return this.c.kioskAttendance.requestCorrection(this.c.kiosks.contextFor(identity, { ip: req.ip }), identity, ticket, {
+      ...input,
+      action: input.action as RequestAction,
+      branchId: input.action === 'CREATE_SESSION' && !input.shiftId ? identity.branchId : null,
+    });
+  }
+
+  @Post('correction-requests/:id/cancel')
+  @HttpCode(200)
+  async cancelRequest(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+    const identity = await this.device(req, res);
+    return this.c.kioskAttendance.cancelRequest(this.c.kiosks.contextFor(identity, { ip: req.ip }), identity, parse(ticketSchema, body).ticket, id);
   }
 }

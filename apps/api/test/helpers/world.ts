@@ -131,8 +131,16 @@ export async function seedOrganization(world: World, opts: { timezone?: string; 
   await punch('BREAK_START');
   await punch('BREAK_END');
   await punch('CLOCK_OUT');
-  const earlier = toLocal(new Date(Date.now() - 5 * 60_000), opts.timezone ?? 'America/Tijuana');
+  // horas relativas a la jornada sembrada (algunas pruebas inyectan su propio reloj)
+  const seeded = (await world.pools.platform.query('SELECT started_at, ended_at FROM attendance.work_sessions WHERE id = $1', [clockIn.workSessionId])).rows[0];
+  const earlier = toLocal(new Date(seeded.started_at.getTime() - 5 * 60_000), opts.timezone ?? 'America/Tijuana');
   await world.corrections.apply(adminCtx, access, clockIn.workSessionId, 4, { action: 'SET_CLOCK_IN', at: { date: earlier.date, time: earlier.time } }, 'Llegó antes; el kiosco estaba ocupado');
+  // Solicitud de corrección del empleado desde el kiosco (Fase 4), pendiente
+  const { ticket: ticket2 } = await world.kioskAttendance.identify(kioskCtx, device, pin);
+  const later = toLocal(new Date(seeded.ended_at.getTime() - 60_000), opts.timezone ?? 'America/Tijuana');
+  await world.kioskAttendance.requestCorrection(kioskCtx, device, ticket2, {
+    clientRequestId: randomUUID(), action: 'SET_CLOCK_OUT', workSessionId: clockIn.workSessionId, start: { date: later.date, time: later.time }, reason: 'Salí un poco después',
+  });
 
   // Overrides de política en los tres niveles
   await world.policies.setOverride(adminCtx, 'ORGANIZATION', null, { breakAllowedMin: 35, weekStartDay: 1 });
