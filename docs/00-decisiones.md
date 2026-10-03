@@ -1,6 +1,6 @@
 # 00 · Registro de decisiones
 
-Todas las decisiones funcionales actuales están **cerradas** (reglas v1.3 y modelo v1.3 congelados; D-1 … D-65). Un cambio posterior se anota aquí con fecha y motivo.
+Todas las decisiones funcionales actuales están **cerradas** (reglas v1.4 y modelo v1.4 congelados; D-1 … D-77). Contrato de la Fase 4: `05-fase-4-contrato.md`. Un cambio posterior se anota aquí con fecha y motivo.
 
 | # | Decisión | Reglas |
 |---|---|---|
@@ -72,6 +72,19 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.3 y mod
 | **D-63** | Un turno en semana `DRAFT` no aparece al empleado ni genera ausencia/falta/retardo ni se liga. | RN-ASI-01 |
 | **D-64** | Duración real = salida efectiva − entrada efectiva; las pausas se reportan aparte; nada se descuenta automáticamente. | RN-CAL-* |
 | **D-65** | Diferencia salida efectiva − `ends_at` (con signo) para reportes; sin sanciones automáticas. | RN-CAL-* |
+
+| **D-66** | **FALTA anulada por el plan.** Si el turno de una FALTA abierta se cancela, se reasigna (empleado o sucursal) o se reprograma y ahora termina en el futuro, la FALTA pasa a `RESOLVED` con `resolution = VOIDED`, `resolution_source = SYSTEM` y motivo de sistema (`SHIFT_CANCELLED: <motivo>`, `SHIFT_REASSIGNED`, `SHIFT_RESCHEDULED`), con auditoría. Nunca se borra; una FALTA ya resuelta no se toca. *Complementa D-44 y RN-INC-03.* | RN-INC-03 |
+| **D-67** | **`SALIDA_ANTICIPADA`**: al cerrar una jornada con turno, salida efectiva antes de `ends_at − exit_tolerance_min` (minutos truncados) ⇒ incidencia con los minutos reales. Solo control, sin sanción. Fatboy: `exit_tolerance_min = 5` (override del negocio). *Implementa RN-CAL/RN-INC-01 pendiente.* | RN-INC-01 |
+| **D-68** | **`SIN_COMIDA`**: al cerrar, si `require_break` y no hubo pausas cerradas y la duración real ≥ `break_required_after_min` (política nueva: 0 de plataforma; Fatboy 360). No afecta horas ni nómina. *Precisa RN-CAL-04.* | RN-CAL-04 |
+| **D-69** | **Pausa omitida** = corrección `ADD_BREAK` (inicio, fin, motivo, usuario, antes/después, auditoría), sin evento físico; puede exceder `max_breaks`. | RN-COR-02 |
+| **D-70** | **Solicitudes de corrección**: el empleado solicita (kiosco con PIN; panel solo con cuenta y ficha), nunca modifica. Acciones: Entrada, Salida, inicio/fin de pausa, pausa omitida, jornada no registrada (con o sin turno). Ventana de 7 días por día operativo y máximo 3 pendientes (políticas). Unicidad de pendientes garantizada en PostgreSQL por acción. *Implementa RN-COR-07; RN-COR-01 se mantiene.* | RN-COR-07 |
+| **D-71** | **Aprobar o rechazar**: ENCARGADO con alcance en la sucursal donde ocurrió o ADMIN; nunca el propio solicitante (servicio + trigger). Se aprueba EXACTAMENTE lo solicitado (sin ajuste ni edición) o se rechaza con motivo; si hace falta otro valor, se rechaza y se corrige directo. Aprobar ejecuta la corrección con las mismas validaciones; si la jornada cambió desde la revisión ⇒ 409. | RN-COR-07 |
+| **D-72** | **`CREATE_SESSION`**: sin turno genera `SIN_TURNO_PROGRAMADO` (y `SIN_ASIGNACION_SUCURSAL` si aplica); con turno conserva `shift_id`, revalida que siga oficial y del empleado, resuelve su FALTA como `CORRECTED` y no genera `SIN_TURNO_PROGRAMADO`. *Ajusta la decisión técnica de la Fase 3 sobre `CREATE_SESSION`.* | RN-COR-08 |
+| **D-73** | **Reportes**: resumen por empleado, detalle de jornadas, incidencias, correcciones/solicitudes. Periodos Hoy · Ayer · Semana · Quincena · Mes (actual/anterior) · Rango, calculados por día operativo en la zona de la sucursal (o del negocio). Valores efectivos; confirmadas vs justificadas; `VOIDED` fuera de totales pero visible en el historial. Rango máx. 366 días. *Cubre D-10.* | RN-REP-* |
+| **D-74** | **Exportación XLSX y CSV**: al momento, sin guardar archivos; hoja de parámetros; neutralización de fórmulas; máx. 100 000 filas; 10 por minuto por usuario; auditada (filtros y conteo, nunca datos). | RN-REP-05 |
+| **D-75** | **Tiempo real (SSE)**: eventos de invalidación sin datos personales; el cliente recarga por los endpoints con RBAC/RLS; canal por negocio; polling de respaldo. Perder un aviso no afecta la consistencia. | RN-RT-* |
+| **D-76** | **Kioscos**: `activated_at`, `last_seen_at`, estado del dispositivo y revocación inmediata; la cookie larga no da acceso sin la validación del servidor en cada petición. | RN-PIN-09 |
+| **D-77** | **Aislamiento SaaS** de todo recurso nuevo (tablas, endpoints, consultas, reportes, SSE, exportaciones): `organization_id` + FKs compuestas + RLS + verificación de catálogo + pruebas A↔B. | RN-ORG-* |
 
 ## Decisiones técnicas de la Fase 3 (para revisión)
 

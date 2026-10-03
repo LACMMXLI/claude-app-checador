@@ -8,11 +8,12 @@ Plataforma para control de asistencia de negocios con varias sucursales: kiosco 
 
 | Documento | Contenido |
 |---|---|
-| [`docs/00-decisiones.md`](docs/00-decisiones.md) | Registro de decisiones (D-1 … D-65) |
+| [`docs/00-decisiones.md`](docs/00-decisiones.md) | Registro de decisiones (D-1 … D-77) |
 | [`docs/01-reglas-de-negocio.md`](docs/01-reglas-de-negocio.md) | Reglas de negocio v1.3 (RN-xxx) |
 | [`docs/02-modelo-de-datos.md`](docs/02-modelo-de-datos.md) | Modelo PostgreSQL v1.3, aislamiento por negocio (RLS) |
 | [`docs/03-arquitectura.md`](docs/03-arquitectura.md) | Arquitectura v1.3, seguridad, despliegue, fases |
 | [`docs/04-operacion.md`](docs/04-operacion.md) | Operación: desarrollo, despliegue en Coolify, checklist de tablas nuevas |
+| [`docs/05-fase-4-contrato.md`](docs/05-fase-4-contrato.md) | Contrato aprobado de la Fase 4 (solicitudes, reportes, SSE, kioscos) |
 
 ## Stack
 
