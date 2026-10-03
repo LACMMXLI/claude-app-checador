@@ -154,7 +154,7 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.4 y mod
 
 - La validación real de Docker/Coolify (imágenes, red, HTTPS, cookies `Secure`, persistencia, reinicios) la hace el dueño en su servidor; no bloquea fases. El repositorio mantiene listos `Dockerfile`s, `docker-compose.yml`, variables y documentación (`04-operacion.md`).
 - [x] Fase 3: GitHub Actions en verde con migración `0008`, pruebas de asistencia, E2E del kiosco y smoke del comando de reconciliación.
-- [ ] Fase 4: GitHub Actions en verde con migraciones `0009`–`0010`, pruebas de solicitudes, reportes, SSE y kioscos, y E2E 53–59.
+- [x] Fase 4: GitHub Actions en verde con migraciones `0009`–`0010`, pruebas de solicitudes, reportes, SSE y kioscos, y E2E 53–59 (run #17, commit `1f4813d`). Las ejecuciones #12–#15 fallaron solo por la prueba E2E (51), que dependía de la hora (corregida en #16).
 - [x] Una ejecución **real** de GitHub Actions en verde sobre PostgreSQL real (typecheck, build, migraciones desde cero, `check:tenancy`, pruebas, E2E, smoke): **run #5, commit `cc1d7cb`**. Las ejecuciones #1–#4 fallaron y se corrigieron (contraseñas de roles compartidas por el clúster; carrera de navegación en el E2E).
 
 ## Ajustes por el congelamiento (respecto al borrador anterior)
