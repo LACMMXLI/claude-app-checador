@@ -195,6 +195,32 @@ describe('turnos, jornadas, tablero, reconciliación, solicitudes y reportes usa
   });
 });
 
+describe('una corrección puede mover la jornada de día operativo: sus solicitudes se siguen encontrando', () => {
+  it('Entrada sin turno a las 05:02 (día 3) corregida a 04:57 (día 2) por solicitud aprobada', async () => {
+    const p = await F.employee('Frontera', F.SMA);
+    now = at('2026-10-05', '05:02');
+    const r = await F.punch(F.kioskSMA, p, 'CLOCK_IN');
+    now = at('2026-10-05', '05:30');
+    await F.punch(F.kioskSMA, p, 'CLOCK_OUT');
+    const v = (await pools.platform.query('SELECT version, operational_date::text AS d FROM attendance.work_sessions WHERE id = $1', [r.workSessionId])).rows[0];
+    expect(v.d).toBe('2026-10-05');
+    const { request } = await world.correctionRequests.create(F.kioskSMA.ctx, { channel: 'KIOSK', deviceId: F.kioskSMA.deviceId }, p.id, {
+      clientRequestId: crypto.randomUUID(),
+      action: 'SET_CLOCK_IN',
+      workSessionId: r.workSessionId,
+      start: { date: '2026-10-05', time: '04:57' },
+      reason: 'Llegué antes del corte',
+    });
+    await world.correctionRequests.approve(F.ctx, F.admin, request.id, request.version, v.version);
+    const after = (await pools.platform.query('SELECT operational_date::text AS d FROM attendance.work_sessions WHERE id = $1', [r.workSessionId])).rows[0];
+    expect(after.d).toBe('2026-10-04'); // D-78: 04:57 pertenece al día operativo anterior
+    const byDay = await world.correctionRequests.list(F.ctx, F.admin, { employeeId: p.id, from: '2026-10-04', to: '2026-10-04' });
+    expect(byDay).toHaveLength(0); // la solicitud conserva el día del registro cuando se pidió (5)
+    const bySession = await world.correctionRequests.list(F.ctx, F.admin, { workSessionId: r.workSessionId });
+    expect(bySession.map((x) => [x.id, x.status])).toEqual([[request.id, 'APPROVED']]);
+  });
+});
+
 describe('PostgreSQL impide que turno, jornada, falta y solicitud diverjan', () => {
   it('jornada ligada con otro día operativo ⇒ SESSION_DATE_MISMATCH; FALTA con otro día ⇒ INCIDENT_DATE_MISMATCH', async () => {
     const p = await F.employee('Guarda', F.VEN);

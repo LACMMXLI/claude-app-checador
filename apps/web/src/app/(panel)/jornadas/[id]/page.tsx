@@ -34,9 +34,9 @@ export default function SessionDetailPage() {
   const { data: d, error, reload } = useLoad(() => api<SessionDetail>(`/attendance/sessions/${id}`), [id]);
   const action = useAction();
   const [form, setForm] = useState<{ action: Action; date: string; time: string; endDate: string; endTime: string; breakId: string; shiftId: string; reason: string }>({ action: 'SET_CLOCK_IN', date: '', time: '', endDate: '', endTime: '', breakId: '', shiftId: '', reason: '' });
-  // solicitudes ligadas a esta jornada (D-70): se consultan por empleado y día operativo
+  // solicitudes ligadas a esta jornada (D-70) por su vínculo, no por fecha (una corrección puede cambiar su día operativo)
   const requests = useLoad(
-    () => (d ? api<CorrectionRequest[]>(`/attendance/correction-requests?employeeId=${d.employee.id}&from=${d.effective.operationalDate}&to=${d.effective.operationalDate}`) : Promise.resolve([])),
+    () => (d ? api<CorrectionRequest[]>(`/attendance/correction-requests?workSessionId=${d.effective.id}`) : Promise.resolve([])),
     [d?.effective.id, d?.effective.version],
   );
   const [resolveReason, setResolveReason] = useState('');
@@ -241,7 +241,7 @@ export default function SessionDetailPage() {
 
       <Card title={t('att.detail.requests')}>
         {(() => {
-          const mine = (requests.data ?? []).filter((r) => r.workSessionId === e.id || (r.shiftId && r.shiftId === e.shiftId));
+          const mine = requests.data ?? [];
           return mine.length === 0 ? <p className="muted">{t('req.empty')}</p> : (
             <table data-testid="session-requests">
               <tbody>

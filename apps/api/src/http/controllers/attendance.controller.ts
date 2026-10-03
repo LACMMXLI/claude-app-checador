@@ -48,6 +48,7 @@ const requestsQuery = z.object({
   employeeId: z.string().uuid().optional(),
   from: date.optional(),
   to: date.optional(),
+  workSessionId: z.string().uuid().optional(),
 });
 const panelRequestSchema = z.object({
   clientRequestId: z.string().uuid(),

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, lte, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import { DomainError, isPgError, raisedCode } from '../../common/errors.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
@@ -311,7 +311,7 @@ export class CorrectionRequestsService {
 
   // ── consultas ───────────────────────────────────────────────────────────────
   /** Bandeja: solicitudes de las sucursales donde el usuario puede ver asistencia. */
-  async list(ctx: TenantContext, access: AccessProfile, filter: { status?: string; branchId?: string; employeeId?: string; from?: string; to?: string }) {
+  async list(ctx: TenantContext, access: AccessProfile, filter: { status?: string; branchId?: string; employeeId?: string; from?: string; to?: string; workSessionId?: string }) {
     const scope = access.branchesFor('attendance.view');
     if (filter.branchId && !access.can('attendance.view', filter.branchId)) throw new DomainError('BRANCH_NOT_FOUND');
     if (scope !== 'ALL' && scope.size === 0) throw new DomainError('FORBIDDEN', { permission: 'attendance.view' });
@@ -326,6 +326,15 @@ export class CorrectionRequestsService {
             filter.employeeId ? eq(correctionRequests.employeeId, filter.employeeId) : undefined,
             filter.from ? gte(correctionRequests.operationalDate, filter.from) : undefined,
             filter.to ? lte(correctionRequests.operationalDate, filter.to) : undefined,
+            // Solicitudes de UNA jornada por su vínculo, no por fecha: una corrección aprobada puede mover la jornada a
+            // otro día operativo (D-78) y la solicitud conserva el día del registro cuando se pidió.
+            filter.workSessionId
+              ? or(
+                  eq(correctionRequests.workSessionId, filter.workSessionId),
+                  sql`${correctionRequests.correctionId} IN (SELECT c.id FROM attendance.corrections c WHERE c.work_session_id = ${filter.workSessionId})`,
+                  sql`${correctionRequests.shiftId} = (SELECT ws.shift_id FROM attendance.work_sessions ws WHERE ws.id = ${filter.workSessionId})`,
+                )
+              : undefined,
           ),
         )
         .orderBy(desc(correctionRequests.createdAt))
