@@ -1,6 +1,6 @@
 # 01 · Reglas de negocio — Reloj checador (plataforma multi-negocio)
 
-> **Versión 1.3 — CONGELADA** (1.1 = D-21 protección del PIN; 1.2 = D-22…D-32 planificación de horarios y turnos; 1.3 = D-33…D-65 asistencia, jornadas, checadas, pausas y kiosco). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
+> **Versión 1.4 — CONGELADA** (1.1 = D-21 protección del PIN; 1.2 = D-22…D-32 planificación de horarios y turnos; 1.3 = D-33…D-65 asistencia, jornadas, checadas, pausas y kiosco; 1.4 = D-66…D-77 cierre del ciclo: faltas anuladas, salida anticipada, sin comida, pausa omitida, solicitudes de corrección, reportes y exportación, tiempo real y control de kioscos — contrato en `05-fase-4-contrato.md`). Cambios posteriores requieren una decisión explícita y quedan anotados en `00-decisiones.md`.
 > Fatboy es el **primer negocio (tenant)**; ninguna regla ni dato está diseñado específicamente para Fatboy.
 > Los valores `default` son los del **nivel plataforma** y se pueden sobrescribir por negocio, sucursal o empleado según la jerarquía de configuración (§10).
 
@@ -147,6 +147,30 @@ Modelo: **Plantilla → Horario semanal → Turno concreto → (Fase 3) Jornada 
 - **RN-ASI-12** **Kiosco** (D-56 … D-59): credencial propia del dispositivo (cookie `HttpOnly`, activación con token de un solo uso o código de emparejamiento); PIN enmascarado que nunca aparece en logs, errores, auditoría ni URLs; al empleado solo su nombre, sucursal, turno oficial actual/próximo, acciones y confirmación; regreso automático a la pantalla de PIN.
 - **RN-ASI-13** **Duración y salida** (D-64, D-65): duración real = salida efectiva − entrada efectiva; pausas aparte, sin descuento automático; diferencia de salida con signo, sin sanciones.
 
+## 8 ter. Cierre del ciclo de asistencia (D-66 … D-77, Fase 4)
+
+- **RN-ASI-14** **FALTA anulada por el plan** (D-66): si el turno de una FALTA abierta se **cancela**, se **reasigna** (a otra persona o sucursal) o se **reprograma** y ahora termina en el futuro, la FALTA pasa a `RESUELTA` con resolución `ANULADA` (`VOIDED`), origen **Sistema** y motivo `SHIFT_CANCELLED: <motivo>`, `SHIFT_REASSIGNED` o `SHIFT_RESCHEDULED`; se audita. **Nunca se borra.** Un turno no oficial no puede recibir FALTA (lo impide PostgreSQL); el nuevo dueño de un turno reasignado sí puede recibir la suya.
+- **RN-ASI-15** **Salida anticipada** (D-67): al cerrar (o corregir) una jornada **con turno**, si la salida efectiva es más de `exit_tolerance_min` minutos antes del fin del turno ⇒ `SALIDA_ANTICIPADA` con los minutos reales. No aplica sin turno, sin salida ni a la salida tarde. Fatboy: tolerancia 5.
+- **RN-ASI-16** **Sin comida** (D-68): con `require_break = sí`, una jornada cerrada sin ninguna pausa cerrada y con duración real ≥ `break_required_after_min` ⇒ `SIN_COMIDA` (control, no descuenta horas). Fatboy: 360 (6 h). Default de plataforma 0.
+- **RN-ASI-17** **Pausa omitida** (D-69): se registra por corrección `ADD_BREAK` (inicio, fin y motivo), dentro de la jornada, sin cruzarse con otras pausas, sin horas futuras; **no** crea evento físico; recalcula exceso de comida y `SIN_COMIDA`; puede exceder `max_breaks` (queda auditado).
+- **RN-ASI-18** **Jornada creada por corrección** (D-72): sin turno genera `SIN_TURNO_PROGRAMADO` (y `SIN_ASIGNACION_SUCURSAL` si aplica); ligada a un turno oficial **no**, y resuelve como `CORREGIDA` la FALTA de ese turno.
+- **RN-ASI-19** **Snapshot de políticas**: cada jornada congela al abrirse las tolerancias de entrada y salida, la pausa obligatoria, `break_required_after_min`, los minutos permitidos y la tolerancia de pausa; los recálculos usan siempre el snapshot (las jornadas anteriores a la Fase 4 usan la política actual solo para los valores que no congelaron).
+
+**Solicitudes de corrección (D-70, D-71)**
+
+- **RN-SOL-01** El empleado **solicita**; nunca modifica. Canales: **kiosco** (cualquier empleado, identificado por PIN, en "Mis registros") y **panel** ("Mis jornadas", solo para cuentas ligadas a una ficha de empleado). No hay cuenta web para todos los empleados.
+- **RN-SOL-02** Acciones: hora de Entrada, hora de Salida, inicio o regreso de una pausa, pausa omitida y jornada no registrada (con turno, p. ej. una FALTA; o sin turno). Siempre con motivo.
+- **RN-SOL-03** **Ventana** por **día operativo** (zona y hora de corte de la sucursal): `0 ≤ hoy operativo − día operativo del registro ≤ correction_request_window_days` (7). **Máximo** `max_pending_correction_requests` (3) pendientes por empleado. Una sola solicitud pendiente igual por objetivo (lo garantiza PostgreSQL). Idempotente por identificador del cliente.
+- **RN-SOL-04** Estados: `PENDIENTE` → `APROBADA` | `RECHAZADA` | `CANCELADA` (terminales, inmutables). Cancelar: solo el solicitante y solo pendiente. Rechazar: motivo obligatorio.
+- **RN-SOL-05** **Aprobar aplica EXACTAMENTE lo solicitado**, con la misma lógica, validaciones y auditoría que una corrección directa y en la misma transacción; la corrección queda ligada a la solicitud. **No existe "aprobar con ajuste"** ni edición por el aprobador: si se requieren otros valores, se rechaza y se aplica una corrección directa. Si la corrección ya no es válida (p. ej. el turno se canceló o la jornada cambió), la aprobación falla y la solicitud sigue pendiente.
+- **RN-SOL-06** Decide quien tiene `attendance.correction.apply` en la **sucursal donde ocurrió**. **Nadie decide su propia solicitud** (ni como empleado ni como quien la registró); lo impide también PostgreSQL. El ENCARGADO tiene `attendance.correction.request` por defecto (revocable).
+
+**Kioscos (D-76)**
+
+- **RN-KIO-01** Estado derivado: **Sin credencial** · **Pendiente de activar** · **Activo** · **Inactivo**; se muestran fecha de activación, último uso y última IP (último uso se registra a lo más una vez por minuto).
+- **RN-KIO-02** **Revocar ahora** invalida la credencial del dispositivo: el navegador queda fuera en su **siguiente petición**, aunque conserve su cookie (el servidor valida en cada llamada). La cookie puede durar hasta un año (se renueva con el uso), pero el control siempre es del servidor.
+- **RN-KIO-03** "Mis registros" en el kiosco: pase temporal renovado en cada acción, solo la propia ficha y solo la ventana de solicitud, datos mínimos; 20 s de inactividad, "Terminar" o un pase vencido borran todo el estado del empleado en la pantalla, sin forma de volver a verlo.
+
 ## 9. Cálculo de asistencia
 
 Variables: `Hp_ini`/`Hp_fin` programados; `Hr_ini`/`Hr_fin` = primera Entrada / última Salida reales. Los segundos se truncan antes de comparar.
@@ -183,11 +207,14 @@ Variables: `Hp_ini`/`Hp_fin` programados; `Hr_ini`/`Hr_fin` = primera Entrada / 
 | Parámetro | Default plataforma | Niveles permitidos |
 |---|---|---|
 | `entry_tolerance_min` | 10 | negocio · sucursal · empleado |
-| `exit_tolerance_min` | 0 | negocio · sucursal · empleado |
+| `exit_tolerance_min` | 0 (Fatboy 5) | negocio · sucursal · empleado |
 | `max_breaks` | 1 | negocio · sucursal · empleado |
 | `break_allowed_min` (por pausa) | 35 | negocio · sucursal · empleado |
 | `break_tolerance_min` | 0 | negocio · sucursal · empleado |
 | `require_break` | no | negocio · sucursal · empleado |
+| `break_required_after_min` (D-68) | 0 (Fatboy 360) | negocio · sucursal · empleado |
+| `correction_request_window_days` (D-70) | 7 | negocio · sucursal |
+| `max_pending_correction_requests` (D-70) | 3 | negocio |
 | `early_entry_window_min` | 60 | negocio · sucursal |
 | `absent_after_min` (estado "Ausente") | 60 | negocio · sucursal |
 | `operational_cutoff` (hora) | 05:00 | negocio · sucursal |
@@ -207,11 +234,11 @@ La zona horaria **no es una política**: es un atributo del negocio (obligatorio
 
 ## 11. Incidencias y estados de llegada
 
-- **RN-INC-01** Tipos implementados (1.3): `RETARDO`, `FALTA`, `SIN_TURNO_PROGRAMADO`, `SIN_ASIGNACION_SUCURSAL`, `TURNO_EN_OTRA_SUCURSAL` (informativa, D-36), `ENTRADA_FALTANTE` (Entrada después del fin de su turno), `SALIDA_OLVIDADA` (D-47), `JORNADA_ABIERTA_EXCEDIDA` (D-48), `REGRESO_COMIDA_FALTANTE`, `COMIDA_EXCEDIDA`. Pendientes para reportes/fases siguientes: `SALIDA_ANTICIPADA` y `SIN_COMIDA` (la diferencia de salida ya se calcula, D-65, sin sanción automática).
+- **RN-INC-01** Tipos implementados (1.4): `RETARDO`, `FALTA`, `SIN_TURNO_PROGRAMADO`, `SIN_ASIGNACION_SUCURSAL`, `TURNO_EN_OTRA_SUCURSAL` (informativa, D-36), `ENTRADA_FALTANTE` (Entrada después del fin de su turno), `SALIDA_OLVIDADA` (D-47), `JORNADA_ABIERTA_EXCEDIDA` (D-48), `REGRESO_COMIDA_FALTANTE`, `COMIDA_EXCEDIDA`, `SALIDA_ANTICIPADA` (D-67) y `SIN_COMIDA` (D-68).
 - **RN-INC-02** Las genera el **sistema**; el empleado nunca las crea ni edita.
-- **RN-INC-03** `ABIERTA` → `RESUELTA` con resolución `CORREGIDA` (por una corrección), `JUSTIFICADA`, `CONFIRMADA` o `DESCARTADA`, siempre con motivo, usuario y fecha. Una incidencia resuelta no se modifica ni se borra; nadie resuelve las propias.
-- **RN-INC-04** Los reportes distinguen confirmados de justificados.
-- **RN-INC-05** El empleado puede consultar (solo lectura) sus incidencias en el kiosco.
+- **RN-INC-03** `ABIERTA` → `RESUELTA` con resolución `CORREGIDA` (por una corrección), `JUSTIFICADA`, `CONFIRMADA`, `DESCARTADA` o `ANULADA` (solo el sistema, D-66), siempre con motivo, origen (persona, corrección o sistema), usuario y fecha. Una incidencia resuelta no se modifica ni se borra; nadie resuelve las propias.
+- **RN-INC-04** Los reportes distinguen confirmados de justificados. Las anuladas por el sistema no cuentan en totales, pero siguen visibles en el historial y en el reporte de incidencias.
+- **RN-INC-05** El empleado puede consultar (solo lectura) sus registros recientes en el kiosco ("Mis registros", RN-KIO-03).
 - **RN-INC-06** **Estados de llegada (separados):**
 
 | Estado | Cuándo |
@@ -224,13 +251,13 @@ La zona horaria **no es una política**: es un atributo del negocio (obligatorio
 
 ## 12. Correcciones
 
-- **RN-COR-01** El empleado no puede corregir nada.
-- **RN-COR-02** Una corrección es una **acción de dominio**: hora de Entrada, de Salida, inicio o fin de una pausa, ligar/desligar el turno oficial o crear la jornada que sí ocurrió (D-53). Cambia el valor **efectivo**; el evento físico no se toca (D-52). **Motivo obligatorio siempre.**
+- **RN-COR-01** El empleado no puede corregir nada; puede **solicitar** una corrección (RN-SOL-01).
+- **RN-COR-02** Una corrección es una **acción de dominio**: hora de Entrada, de Salida, inicio o fin de una pausa, ligar/desligar el turno oficial, agregar una pausa omitida (D-69) o crear la jornada que sí ocurrió (D-53). Cambia el valor **efectivo**; el evento físico no se toca (D-52). **Motivo obligatorio siempre.**
 - **RN-COR-03** **Siempre se conserva la original** (nunca se borra ni reemplaza en silencio) y hay **auditoría antes/después**.
 - **RN-COR-04** **Encargado:** corrige jornadas **ocurridas en sus sucursales**, sin importar la sucursal habitual del empleado.
 - **RN-COR-05** **Nadie puede corregir su propia jornada.** La de un encargado la corrige otro encargado con permiso sobre esa sucursal o un administrador.
 - **RN-COR-06** **Administrador:** puede corregir empleados y encargados **dentro de su negocio** (nunca de otro), excepto su propia jornada.
-- **RN-COR-07** Existe `attendance.correction.request` (solicitar con aprobación) para roles futuros, sin código nuevo.
+- **RN-COR-07** `attendance.correction.request` habilita solicitar correcciones de la **propia** ficha desde el panel (D-70); la aprobación genera la corrección (RN-SOL-05).
 - **RN-COR-08** Al aplicarse se recalcula la jornada y la incidencia pasa a `CORREGIDA`. No puede quedar una secuencia ilógica.
 
 ## 13. Empleados
@@ -269,13 +296,15 @@ Modelo de permisos: **roles con permisos granulares** y **alcance** por asignaci
 | Ver empleados / asistencia / tablero de su alcance | — | ✅ | ✅ |
 | Resolver incidencias | — | ✅ | ✅ |
 | Aplicar correcciones (no las propias) | — | ✅ su alcance | ✅ |
+| Solicitar corrección de lo propio | ✅ kiosco | ✅ kiosco / panel | ✅ kiosco / panel (si tiene ficha) |
+| Aprobar o rechazar solicitudes (no las propias) | — | ✅ su alcance | ✅ |
 | Programar horarios | — | con permiso | ✅ |
 | Altas, bajas, PIN, asignaciones | — | opcional por permiso | ✅ |
 | Sucursales, kioscos, configuración, roles, membresías | — | — | ✅ |
 | Reportes y exportación | — | su alcance | ✅ |
 | Auditoría | — | — | ✅ |
 
-- **RN-ROL-01** El empleado no tiene cuenta web (acceso desde celular: mejora futura).
+- **RN-ROL-01** El empleado no tiene cuenta web (acceso desde celular: mejora futura). Consulta y solicita desde el kiosco con su PIN; si además tiene una cuenta de panel ligada a su ficha, también desde "Mis jornadas" (D-70).
 - **RN-ROL-02** Roles y permisos son **por negocio**.
 - **RN-ROL-03** Un encargado nunca ve datos fuera de su alcance, aunque conozca identificadores.
 
@@ -286,6 +315,9 @@ Muestra los estados de §11 (RN-INC-06) más: **En comida** (minutos transcurrid
 - **RN-RT-01** Incluye turnos nocturnos que iniciaron "ayer" y siguen abiertos. "Hoy" = **día operativo** de la sucursal.
 - **RN-RT-02** Actualización ≤ 2 s tras una checada; estados dependientes del tiempo cada ~30 s.
 - **RN-RT-03** Cada usuario recibe solo su negocio y las sucursales de su alcance.
+- **RN-RT-04** Tiempo real por **SSE** (D-75) en el tablero y en la bandeja de solicitudes: los avisos solo **invalidan** (tipo, id, sucursal, operación; sin datos personales) y la pantalla vuelve a consultar con sus permisos. Un aviso perdido nunca afecta la consistencia.
+- **RN-RT-05** Si el canal en vivo no está disponible (proxy, red, límite de conexiones), la pantalla funciona igual por **polling cada 30 s** e indica el modo; se reintenta el canal con espera creciente.
+- **RN-RT-06** La conexión revalida sesión, negocio y permisos periódicamente y se cierra al perderlos; máximo 5 conexiones por usuario y 30 min por conexión (el navegador reconecta solo).
 
 ## 16. Reportes y exportación
 
@@ -293,8 +325,14 @@ Muestra los estados de §11 (RN-INC-06) más: **En comida** (minutos transcurrid
 - **RN-REP-02** **Accesos rápidos:** Hoy · Ayer · Esta semana · Semana pasada · 1–15 · 16–fin de mes · Este mes · Mes pasado · Rango personalizado. Se calculan en la zona de la sucursal; "Hoy/Ayer" usan el día operativo; "Semana" usa `week_start_day`.
 - **RN-REP-03** Métricas: horas programadas, horas trabajadas, retardos (y minutos), faltas, pausas (duración y exceso por pausa y acumulado), salidas anticipadas, incidencias y correcciones.
 - **RN-REP-04** Jornadas corregidas visibles con acceso al antes/después.
-- **RN-REP-05** Exportación a **Excel** (MVP) y **PDF** (después); se audita.
+- **RN-REP-05** Exportación a **Excel (XLSX)** y **CSV** (D-74); **PDF** después; se audita.
 - **RN-REP-06** **No existe entidad "periodo de pago"** por ahora; el diseño no impide agregarla (junto con nómina) más adelante.
+- **RN-REP-07** Reportes (D-73): **resumen por empleado**, **detalle de jornadas** (incluye faltas reales), **incidencias** (todas, con resolución y origen) y **correcciones y solicitudes**. Siempre con valores **efectivos** y por **día operativo**.
+- **RN-REP-08** Alcance: la **sucursal donde ocurrió** cada registro y donde el usuario tiene `reports.view`; exportar además exige `reports.export`. Nunca datos de otro negocio.
+- **RN-REP-09** Quincenas: 1–15 y 16–fin de mes (actual y anterior). Los periodos rápidos los calcula el servidor; "Hoy" es el día operativo de la sucursal (o del negocio si son todas).
+- **RN-REP-10** Límites (decisión 7): rango máximo **366 días**; exportación máxima **100 000 filas**; **10 exportaciones por minuto por usuario**.
+- **RN-REP-11** XLSX con hoja del reporte y hoja **"Parámetros"** (negocio, sucursal, empleado, rango, zona, filas, quién y cuándo); CSV UTF-8 con BOM (RFC 4180). Los textos que parecen fórmulas (`=`, `+`, `-`, `@`) se neutralizan. Los archivos se generan al momento y no se guardan.
+- **RN-REP-12** Cada exportación se audita con el reporte, formato, filtros y número de filas.
 
 ## 17. Auditoría
 
@@ -312,4 +350,4 @@ Muestra los estados de §11 (RN-INC-06) más: **En comida** (minutos transcurrid
 
 ## 19. Fuera del alcance (la arquitectura lo prevé)
 
-Facturación, suscripciones, planes, pagos y onboarding comercial · UI de administración de plataforma · subdominios por negocio · recuperación de contraseña por correo · alta de usuarios por el administrador del negocio (invitaciones) · QR / cámara / biometría · **modo offline real** · vacaciones, permisos, incapacidades · días festivos · horas extra, nómina, periodos de pago y cualquier cálculo de pago · reglas "N retardos = 1 falta" · notificaciones · PDF · rol de RH · módulos futuros (mesas, adelantos, nómina, comunicados, solicitudes).
+Facturación, suscripciones, planes, pagos y onboarding comercial · UI de administración de plataforma · subdominios por negocio · recuperación de contraseña por correo · alta de usuarios por el administrador del negocio (invitaciones) · QR / cámara / biometría · **modo offline real** · vacaciones, permisos, incapacidades · días festivos · horas extra, nómina, periodos de pago y cualquier cálculo de pago · reglas "N retardos = 1 falta" · notificaciones · PDF · rol de RH · módulos futuros (mesas, adelantos, nómina, comunicados) · aprobación multinivel o "aprobar con ajuste" · reportes programados o por correo.

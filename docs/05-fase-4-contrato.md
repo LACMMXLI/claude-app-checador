@@ -1,6 +1,8 @@
 # 05 · Fase 4 — Contrato de implementación (APROBADO)
 
 > Aprobado por el dueño sobre el estado `63d6aae` (CI #11 en verde), con las 7 decisiones confirmadas y las precisiones A–G.
+> **Estado: implementado** (migraciones `0009`–`0010`, API, panel, kiosco, pruebas Vitest y E2E 53–59). Las decisiones técnicas
+> internas están en `00-decisiones.md` § Decisiones técnicas de la Fase 4.
 > Las decisiones funcionales quedan registradas como **D-66 … D-77** en `00-decisiones.md`. Si durante la implementación
 > aparece una decisión funcional nueva, se consulta; las decisiones técnicas internas que respetan este contrato se
 > resuelven con la alternativa más segura y se documentan en `00-decisiones.md` (§ Decisiones técnicas de la Fase 4).

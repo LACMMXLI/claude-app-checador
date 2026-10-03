@@ -1,6 +1,6 @@
 # 03 · Arquitectura
 
-> **Versión 1.3 — CONGELADA.** Estado: **Fases 0, 1, 2 y 3 implementadas y probadas** (ver §10). CI de GitHub Actions en verde. La validación con Docker/Coolify la realiza el dueño en su servidor (§9).
+> **Versión 1.4 — CONGELADA.** Estado: **Fases 0, 1, 2, 3 y 4 implementadas y probadas** (ver §10). CI de GitHub Actions en verde. La validación con Docker/Coolify la realiza el dueño en su servidor (§9).
 
 ## 1. Resumen
 
@@ -13,9 +13,9 @@
 | Acceso a datos | **Drizzle ORM** para consultas tipadas; **migraciones SQL propias** como fuente de verdad | Fase 0 |
 | Validación | **Zod** | Fase 0 |
 | Frontend | **Next.js 16 + React 19**, CSS propio (sin framework visual todavía); panel funcional responsive; textos por **sistema de traducciones** (es-MX). El panel reenvía `/api/*` a la API (proxy del mismo origen) | Fase 1: panel. Fase 3: kiosco táctil (`/kiosco`) y asistencia |
-| Tiempo real | **SSE** | Fase 4 |
-| Excel | `exceljs` | Fase 6 |
-| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel y del kiosco) | 309 pruebas + 5 E2E |
+| Tiempo real | **SSE** (`LISTEN/NOTIFY` de PostgreSQL → `EventSource`), polling de respaldo | Fase 4 |
+| Excel / CSV | `exceljs` 4.4.0 (fijada) · CSV propio (RFC 4180, BOM, fórmulas neutralizadas) | Fase 4 |
+| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel y del kiosco) | 373 pruebas + 12 E2E |
 | CI | GitHub Actions: typecheck → build → migraciones desde cero → `check:tenancy` → pruebas → smoke | Fase 0 |
 
 **Por qué NestJS y no solo rutas API de Next.js:** módulos que crecerán (mesas, adelantos, nómina, comunicados), procesos en segundo plano con scheduler, tiempo real con estado en memoria, múltiples clientes (kiosco, panel, móvil) y el **contexto de negocio** como pieza transversal y auditable.
@@ -86,7 +86,15 @@ Lo único que ocurre antes de conocer el negocio: `auth.resolve_kiosk_token`, `a
 `core.list_active_organizations()` → cada negocio se procesa en **su propia transacción con su propio contexto** (rol `app_user`, sin `BYPASSRLS`) y con un candado consultivo. Un error en uno no afecta a los demás; los suspendidos se omiten. Hoy: la reconciliación de asistencia (`node dist/src/cli/reconcile.js`, idempotente), programable en Coolify o dentro de la API con `RECONCILE_INTERVAL_SEC`.
 
 ### 2.8 Tiempo real (Fase 4)
-Canales por `organization_id:branch_id`; al abrir el stream se verifica el alcance del usuario.
+- **Origen:** triggers `AFTER INSERT OR UPDATE` en jornadas, pausas, incidencias y solicitudes emiten `pg_notify('att_<negocio>', {k, id, b, op})` (transaccional: solo si se confirma). Sin nombres ni datos personales: es una **invalidación**.
+- **API:** `NotificationHub` mantiene UNA conexión dedicada por proceso y hace `LISTEN` por negocio solo mientras hay suscriptores; si la conexión se cae, reconecta y manda `resync`. `GET /api/attendance/stream?branchId=` exige `attendance.view` y la sucursal en el alcance (otra sucursal u otro negocio ⇒ 404); reenvía solo avisos de su negocio y de las sucursales de su alcance; `ping` cada 25 s; revalida sesión/negocio/permisos cada 60 s y cierra si cambian; vida máxima 30 min; 5 conexiones por usuario (429).
+- **Panel:** `useLive` (`EventSource` con la cookie de sesión) agrupa los avisos y vuelve a consultar los endpoints normales (RBAC + RLS). Sin canal (error, 60 s sin `ping`) ⇒ polling cada 30 s e indicador; reintento con espera creciente. El proxy `/api/*` de Next transmite `text/event-stream` sin búfer (`x-accel-buffering: no`).
+- **Consistencia:** perder un aviso solo retrasa la pantalla (recarga de respaldo cada 2 min aun con canal activo); nunca es fuente de verdad.
+
+### 2.8.1 Solicitudes, reportes y kioscos (Fase 4)
+- **Solicitudes** (`CorrectionRequestsService`): crear (kiosco por pase, panel por membresía con ficha; idempotente), cancelar, aprobar y rechazar. Aprobar ejecuta `CorrectionsService.applyTx/createSessionTx` en la MISMA transacción, con el instante absoluto guardado y `request_id`; si falla, nada cambia. Unicidad, transiciones y "nadie decide la suya" también en PostgreSQL.
+- **Reportes** (`ReportsService`): una lectura `REPEATABLE READ` de solo lectura con alcance por sucursal (`reports.view`, y `reports.export` para exportar); periodos rápidos calculados en el servidor con el día operativo; exportación XLSX/CSV generada al momento, auditada y limitada (366 días, 100 000 filas, 10/min por usuario).
+- **Kioscos:** estado derivado, `activated_at`, último uso e IP (a lo más una escritura por minuto); "Revocar ahora" invalida la credencial y la siguiente petición del navegador falla.
 
 ### 2.9 Auditoría y operaciones de plataforma
 `audit.audit_log` (por negocio, con sucursal cuando aplica, solo-agregar, escrita **en la misma transacción**, con redacción automática de PIN/hash/contraseña/token). `platform.platform_audit_log` para altas de negocio y restablecimientos. Operaciones de plataforma por **CLI** (`apps/api/src/cli/platform.ts`): crear negocio (zona horaria obligatoria; siembra roles `ADMIN`/`ENCARGADO` y primer administrador), suspender/reactivar, restablecer contraseña global.
@@ -143,7 +151,10 @@ sequenceDiagram
 ```
 **Implementado (Fases 0–3):** activación del navegador con rotación de la credencial (cookie `HttpOnly`), pase corto tras el PIN, las cuatro acciones con idempotencia y concurrencia segura. Antes (Fases 0–1): alta de dispositivo desde el panel, token (negocio+sucursal+dispositivo) generar/revocar/regenerar, activar/desactivar, emparejamiento por código, `POST /api/kiosk/identify` con pausa progresiva por dispositivo (D-21) y registro de intentos. El token **nunca** puede cruzar a otro negocio; la sucursal sale del token.
 
-### 6.2 Corrección (Fase 3)
+### 6.2 Corrección (Fase 3) y solicitud (Fase 4)
+**Solicitud (Fase 4):** empleado (kiosco: PIN → "Mis registros"; panel: "Mis jornadas") ⇒ ventana por día operativo, límite de pendientes, una pendiente igual por objetivo ⇒ `PENDING` (la jornada no cambia) ⇒ aviso SSE a la bandeja ⇒ el decisor (otra persona, con `attendance.correction.apply` donde ocurrió) **aprueba exactamente lo solicitado** (corrección + `request_id` + auditoría, en una transacción) o **rechaza con motivo** ⇒ el empleado ve el resultado.
+
+**Corrección directa:**
 Motivo obligatorio ⇒ misma organización (RLS), sucursal donde ocurrió la jornada dentro del alcance, **no es la propia jornada** (servicio + trigger), versión vista ⇒ transacción: valor efectivo nuevo + fila en `corrections` (original, corregido, antes/después) + recálculo de retardo/comida + incidencias resueltas como `CORRECTED` + auditoría. El evento físico nunca se toca.
 
 ## 7. Seguridad
@@ -158,9 +169,9 @@ Motivo obligatorio ⇒ misma organización (RLS), sucursal donde ocurrió la jor
 - **PIN:** aleatorio criptográfico, sin triviales; valor indexable `HMAC-SHA256(PIN_PEPPER, organization_id + ":" + PIN)` (único por negocio, sin correlación entre negocios); se muestra una vez; el empleado no lo cambia; restablecer invalida el anterior; auditoría y logs sin el PIN; **pausa corta y progresiva por dispositivo (D-21)**: 10 s → … → tope 120 s, nunca bloqueos largos del kiosco compartido.
 - **Secretos** solo como variables de entorno en Coolify. **HTTPS** por el proxy. **Hora:** servidor en UTC. Mensajes de error genéricos para PIN y credenciales.
 
-## 8. Kiosco (UX, Fase 3)
+## 8. Kiosco (UX, Fases 3–4)
 
-`/kiosco` en pantalla completa (Fase 3): **logo y nombre del negocio** y de la sucursal, reloj del servidor, PIN enmascarado con teclado numérico grande, borrar y confirmar; después nombre, turno oficial y **solo los botones posibles**; confirmación grande y regreso automático (20 s de inactividad, 4 s tras checar); **"Sin conexión"** visible (MVP: contingencia = corrección con motivo, que puede crear la jornada). Futuro: "lanzador del empleado" (mesas, adelantos, comunicados).
+`/kiosco` en pantalla completa (Fase 3): **logo y nombre del negocio** y de la sucursal, reloj del servidor, PIN enmascarado con teclado numérico grande, borrar y confirmar; después nombre, turno oficial y **solo los botones posibles**; confirmación grande y regreso automático (20 s de inactividad, 4 s tras checar); **"Sin conexión"** visible (MVP: contingencia = corrección con motivo, que puede crear la jornada). Fase 4: botón **"Mis registros"** tras el PIN (jornadas, pausas y faltas de la ventana, y sus solicitudes) con "Solicitar corrección"; pase renovado en cada acción, 20 s de inactividad, "Terminar", y limpieza total del estado al salir, al vencer el pase o al ocultarse la pestaña (sin navegación para volver). Futuro: "lanzador del empleado" (mesas, adelantos, comunicados).
 
 ## 9. Despliegue en Coolify
 
@@ -180,10 +191,8 @@ Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_
 | **1 · Identidad, sesión y administración base** | D-21; login/logout, sesión por cookie con rotación, selector y cambio de negocio, invitaciones de un solo uso, RBAC HTTP por sucursal, CRUD de sucursales/empleados/kioscos/políticas (override vs efectiva), auditoría; panel web funcional; E2E | ✅ **Hecha** (pendiente: criterios de despliegue §9) |
 | **2 · Horarios y turnos** | Horario semanal DRAFT/PUBLISHED, turno concreto con zona y DST, traslapes en PostgreSQL, alcance del encargado, histórico protegido, concurrencia optimista, copiar semana, plantillas; pantalla "Horario semanal", plantillas y próximos turnos del empleado | ✅ **Hecha** |
 | **3 · Asistencia** | D-33; kiosco táctil con activación segura; jornadas, eventos inmutables, pausas, matching con turnos oficiales, día operativo, incidencias, reconciliación, correcciones auditadas, tablero (consulta cada 30 s), jornadas, incidencias, historial | ✅ **Hecha** |
-| 4 · Tiempo real | SSE por negocio/sucursal (hoy el tablero consulta cada 30 s) | Pendiente |
-| 5 · Correcciones avanzadas | Solicitudes con aprobación (`attendance.correction.request`), agregar pausas omitidas, reprocesos | Pendiente |
-| 6 · Reportes | Consultas + Excel + accesos rápidos de periodo | Pendiente |
-| 7 · Autoservicio del empleado | Horarios/asistencias/incidencias en kiosco | Pendiente |
+| **4 · Cierre del ciclo** | D-66…D-77: FALTA anulada por el plan, salida anticipada, sin comida, pausa omitida; solicitudes de corrección (kiosco y panel) con aprobación exacta o rechazo; reportes con periodos rápidos y exportación XLSX/CSV; tablero y bandeja en tiempo real (SSE + polling); estado, último uso y revocación inmediata de kioscos | ✅ **Hecha** (contrato `05-fase-4-contrato.md`) |
+| Siguiente | Reprocesos por cambio de política, autoservicio ampliado (horarios en kiosco), PDF, notificaciones | Pendiente |
 | Después | Recuperación por correo, modo offline, PDF, QR/cámara, nómina, UI de plataforma, planes/facturación | — |
 
 ## 11. Riesgos y mitigaciones

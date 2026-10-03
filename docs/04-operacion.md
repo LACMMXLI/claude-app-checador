@@ -1,4 +1,4 @@
-# 04 · Operación (Fases 0–3)
+# 04 · Operación (Fases 0–4)
 
 ## 1. Desarrollo local
 
@@ -27,11 +27,17 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
      --admin-email dueno@ejemplo.com --admin-name "Nombre del dueño" --admin-password '<mínimo 10 caracteres>'
    ```
    La zona horaria es **obligatoria**; sin ella el comando falla. Las sucursales heredan la del negocio (se puede sobrescribir por sucursal después).
+   **Valores de Fatboy de la Fase 4** (salida anticipada con 5 min de tolerancia; "sin comida" desde 6 h de jornada cuando la pausa es obligatoria). Se aplican como override del negocio, nunca en código:
+   ```bash
+   docker compose --profile tools run --rm platform set-policy --slug fatboy \
+     --param breakRequiredAfterMin=360 --param exitToleranceMin=5
+   ```
+   (`--param` se repite; acepta números, `true`/`false` y `null` para volver a heredar; valida rangos y niveles igual que el panel y queda auditado. También se puede hacer desde Panel → Políticas.)
 6. Restablecer una contraseña global (mientras no exista recuperación por correo): `... run --rm platform reset-password --email persona@ejemplo.com --password '<nueva>'`.
 7. Suspender/reactivar un negocio: `... platform set-status --slug fatboy --status SUSPENDED|ACTIVE`.
 
 8. Dar de alta usuarios: desde el panel → **Usuarios → Invitar**. El enlace se muestra una sola vez; entrégalo a la persona (aún no se envían correos).
-9. **Kioscos (tablets):** Panel → **Kioscos → Nuevo kiosco** (elige la sucursal). Copia el token (se muestra una vez). En la tablet abre `https://<dominio>/kiosco`, pega el token y pulsa **Activar** (también sirve un código de emparejamiento). El token queda inutilizado: la tablet recibe su propia credencial en una cookie segura. Para retirar una tablet: **Revocar token** o **Desactivar**; deja de checar en la siguiente petición.
+9. **Kioscos (tablets):** Panel → **Kioscos → Nuevo kiosco** (elige la sucursal). Copia el token (se muestra una vez). En la tablet abre `https://<dominio>/kiosco`, pega el token y pulsa **Activar** (también sirve un código de emparejamiento). El token queda inutilizado: la tablet recibe su propia credencial en una cookie segura. Para retirar una tablet: **Revocar ahora** o **Desactivar**; deja de checar en la siguiente petición aunque conserve su cookie. La lista muestra el estado (Activo · Pendiente de activar · Sin credencial · Inactivo), la fecha de activación, el último uso y la última IP (se actualizan a lo más una vez por minuto).
 10. **Reconciliación de asistencia** (faltas, salidas olvidadas, jornadas abiertas largas, pausas sin regreso). Es idempotente; elige UNA opción (o ambas, no se duplica nada):
     - Tarea programada de Coolify (recomendado, p. ej. cada 5 minutos) en el servicio `api`: `node dist/src/cli/reconcile.js`; o con compose: `docker compose --profile tools run --rm reconcile`.
     - Dentro de la API: `RECONCILE_INTERVAL_SEC=300`.
@@ -43,6 +49,9 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
 - GitHub Actions en verde (lo está desde el run #5). Mantenerlo en verde es requisito para cada despliegue.
 - La migración `0007` agrega permisos de planificación a los roles `ADMIN`/`ENCARGADO` existentes y la política de duración de turnos.
 - La migración `0008` crea el esquema `attendance`, el trigger de D-33 y renombra la política `max_hours_unscheduled` → `max_open_session_minutes` (960). La cookie del kiosco usa `__Host-kiosk` con `COOKIE_SECURE=true` (HTTPS obligatorio, igual que el panel).
+- La migración `0009` (Fase 4) agrega incidencias `SALIDA_ANTICIPADA`/`SIN_COMIDA`, la resolución `VOIDED`, las solicitudes de corrección, la acción `ADD_BREAK`, tres políticas nuevas y los avisos `NOTIFY`; da `attendance.correction.request` a los roles de sistema `ENCARGADO` y `ADMIN` existentes. La `0010` agrega `activated_at`/`last_seen_ip` a los kioscos (los ya usados se marcan activados con su fecha de emisión).
+- **Tiempo real detrás de Traefik (Coolify):** el panel recibe `text/event-stream` por el mismo dominio. No agregar a `web` middlewares que acumulen la respuesta (buffering); la compresión de Traefik excluye `text/event-stream` por defecto. Si un proxy corta conexiones largas, el panel cae solo a polling cada 30 s (indicador "Actualización cada 30 s") y reintenta; no se pierden datos.
+- **Límites de reportes:** rango máximo 366 días; exportación máxima 100 000 filas (`EXPORT_TOO_LARGE`, reducir rango o filtrar); 10 exportaciones por minuto por usuario (`EXPORT_RATE_LIMITED`). Cada exportación queda en Auditoría como `report.exported` con filtros y filas.
 - Antirrebote: por defecto 60 s entre checadas del mismo empleado (Políticas → "Antirrebote de checada"). Para probar el flujo completo rápidamente puede bajarse a 0 y volver a 60 después.
 
 ## 3. Respaldos (crítico)
@@ -60,7 +69,7 @@ La base contiene a **todos** los negocios y su auditoría. Respaldos diarios de 
 
 ## 5. Qué NO está todavía
 
-Recuperación de contraseña por correo y envío de invitaciones por correo, reportes y exportación, tiempo real por SSE, solicitudes de corrección con aprobación, modo offline del kiosco, nómina (ver `03-arquitectura.md §10`).
+Recuperación de contraseña por correo y envío de invitaciones por correo, notificaciones, PDF, reprocesos masivos por cambio de política, modo offline del kiosco, nómina (ver `03-arquitectura.md §10`).
 
 ## 6. Roles de PostgreSQL son de todo el clúster
 

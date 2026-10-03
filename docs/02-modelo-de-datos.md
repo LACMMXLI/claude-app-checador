@@ -1,7 +1,7 @@
 # 02 · Modelo de datos (PostgreSQL) — multi-negocio
 
-> **Versión 1.3 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
-> Estado de implementación: **Fases 0 a 3 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`, `attendance`; migraciones `0001`–`0008` en `apps/api/db/migrations`).
+> **Versión 1.4 — CONGELADA.** Deriva de `01-reglas-de-negocio.md`.
+> Estado de implementación: **Fases 0 a 4 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`, `attendance`; migraciones `0001`–`0010` en `apps/api/db/migrations`). Las migraciones aplicadas nunca se modifican: cada cambio es una migración incremental.
 
 ## 1. Convenciones
 
@@ -144,7 +144,7 @@ CHECK (valid_to IS NULL OR valid_to >= valid_from)
 Un usuario con varias sucursales = **una cuenta, una membresía, una asignación con varias filas de alcance**.
 
 ### `core.kiosk_devices` y `core.kiosk_pairing_codes`
-- `kiosk_devices`: `id` (= `device_id`), `organization_id`, `branch_id`, `name`, `status` (`ACTIVE`/`INACTIVE`, del dispositivo) y su token por separado: `token_prefix` (único global), `token_hash` (SHA-256 del secreto; nunca el token), `token_issued_at`, `token_revoked_at` (prefijo y hash ambos nulos = sin token), `last_seen_at`. **El token pertenece a `organization_id + branch_id + device_id`**; regenerar lo reemplaza y el anterior deja de funcionar. **Activar** un navegador como kiosco (D-56) también lo rota: el token pegado es de un solo uso y la credencial nueva solo vive en una cookie `HttpOnly`.
+- `kiosk_devices`: `id` (= `device_id`), `organization_id`, `branch_id`, `name`, `status` (`ACTIVE`/`INACTIVE`, del dispositivo) y su token por separado: `token_prefix` (único global), `token_hash` (SHA-256 del secreto; nunca el token), `token_issued_at`, `token_revoked_at` (prefijo y hash ambos nulos = sin token), `last_seen_at`, y desde `0010` (D-76) `activated_at` (cuándo un navegador canjeó la credencial vigente) y `last_seen_ip` (≤ 64 caracteres). `last_seen_at`/`last_seen_ip` se escriben a lo más una vez por minuto. **Estado derivado** (no se guarda): sin token ⇒ *Sin credencial*; `status = INACTIVE` ⇒ *Inactivo*; `activated_at` anterior a `token_issued_at` (o nulo) ⇒ *Pendiente de activar*; si no ⇒ *Activo*. **El token pertenece a `organization_id + branch_id + device_id`**; regenerar lo reemplaza y el anterior deja de funcionar. **Activar** un navegador como kiosco (D-56) también lo rota: el token pegado es de un solo uso y la credencial nueva solo vive en una cookie `HttpOnly`.
 - `kiosk_pairing_codes`: `id`, `organization_id`, `branch_id`, `code_hash`, `expires_at`, `used_at`, `created_by`. Un solo uso, vencimiento corto.
 
 ### `core.invitations` (Fase 1)
@@ -173,7 +173,7 @@ Más rangos por parámetro (`CHECK (break_allowed_min BETWEEN 0 AND 600)`, `week
 
 **Política efectiva** (`resolveEffectivePolicy`, función pura con pruebas): `plataforma → ORGANIZATION → BRANCH → EMPLOYEE`, campo por campo (`COALESCE` en orden inverso). Ejemplo: plataforma 35 · Fatboy (sin override) 35 · San Marcos 35 · Venecia 40 · empleado X (override 30) ⇒ efectivo de X = 30.
 
-Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_open_session_minutes` (antes `max_hours_unscheduled`, renombrado por D-48), `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec`, `week_start_day`, `shift_min_minutes`, `shift_max_minutes` (tabla de defaults y niveles en `01 §10`).
+Parámetros: `entry_tolerance_min`, `exit_tolerance_min`, `max_breaks`, `break_allowed_min`, `break_tolerance_min`, `require_break`, `early_entry_window_min`, `absent_after_min`, `operational_cutoff`, `max_open_session_minutes` (antes `max_hours_unscheduled`, renombrado por D-48), `debounce_sec`, `pin_max_attempts`, `pin_lockout_sec`, `pin_lockout_max_sec`, `week_start_day`, `shift_min_minutes`, `shift_max_minutes` y, desde `0009`, `break_required_after_min` (0–1440, todos los niveles), `correction_request_window_days` (1–31, negocio · sucursal) y `max_pending_correction_requests` (1–20, solo negocio) (tabla de defaults y niveles en `01 §10`).
 
 ## 6. Esquema `audit`
 
@@ -249,18 +249,45 @@ CONSTRAINT events_idempotency UNIQUE (organization_id, device_id, client_event_i
 `work_session_id`, `sequence`, `started_at`, `ended_at` (nunca se inventa, D-50), `allowed_minutes` y `tolerance_minutes` (copia de la política), **`duration_minutes`** y **`exceeded_minutes`** = columnas **generadas** (minutos con segundos truncados), `origin`, `version`. `UNIQUE (organization_id, work_session_id, sequence)`; una sola pausa abierta por jornada. `max_breaks` vive en la política: 2 pausas no requieren migración.
 
 ### `incidents`
-`branch_id`, `employee_id`, `work_session_id` (nullable), `shift_id` (nullable; la `FALTA` no tiene jornada), `operational_date`, `type` (ver RN-INC-01), `status` (`OPEN`/`RESOLVED`), `details`, `detected_by` (`KIOSK`/`RECONCILER`/`CORRECTION`), `resolution` (`CORRECTED`/`JUSTIFIED`/`CONFIRMED`/`DISMISSED`) + `resolved_at`, `resolved_by`, `resolution_reason` (obligatorio), `resolution_correction_id`.
+`branch_id`, `employee_id`, `work_session_id` (nullable), `shift_id` (nullable; la `FALTA` no tiene jornada), `operational_date`, `type` (ver RN-INC-01), `status` (`OPEN`/`RESOLVED`), `details`, `detected_by` (`KIOSK`/`RECONCILER`/`CORRECTION`), `resolution` (`CORRECTED`/`JUSTIFIED`/`CONFIRMED`/`DISMISSED`/`VOIDED`) + `resolution_source` (`USER`/`CORRECTION`/`SYSTEM`; nulo mientras está abierta; `VOIDED ⇔ SYSTEM`, `CORRECTED ⇔ CORRECTION`), `resolved_at`, `resolved_by`, `resolution_reason` (obligatorio), `resolution_correction_id`.
 ```sql
 UNIQUE (organization_id, work_session_id, type) WHERE work_session_id IS NOT NULL AND status = 'OPEN'
-UNIQUE (organization_id, shift_id) WHERE type = 'FALTA'          -- una falta por turno, aunque se resuelva (D-44)
+-- 0009 (D-66): una FALTA NO ANULADA por turno (antes: una por turno aunque se resolviera, D-44). La anulada se conserva
+-- y el nuevo dueño de un turno reasignado puede recibir la suya.
+UNIQUE (organization_id, shift_id) WHERE type = 'FALTA' AND (resolution IS NULL OR resolution <> 'VOIDED')
 -- trigger: una incidencia resuelta no se modifica
+-- trigger guard_falta_insert: FALTA solo para un turno OFICIAL de ese empleado y sucursal (FALTA_NOT_APPLICABLE)
+-- trigger scheduling.void_falta_on_shift_change (AFTER UPDATE OF status, employee_id, branch_id ON shifts):
+--   cancelado ⇒ VOIDED 'SHIFT_CANCELLED: <motivo>'; reasignado ⇒ VOIDED 'SHIFT_REASSIGNED'; auditado con actor SYSTEM.
+--   La reprogramación a futuro ('SHIFT_RESCHEDULED') la anula el servicio, porque depende del reloj de la aplicación.
 ```
 
 ### `corrections` — correcciones (solo-agregar, D-51/D-52/D-53)
-`branch_id` (donde ocurrió la jornada), `employee_id`, `work_session_id`, `break_id`, `incident_id`, `action` (`CREATE_SESSION`, `SET_CLOCK_IN`, `SET_CLOCK_OUT`, `SET_BREAK_START`, `SET_BREAK_END`, `LINK_SHIFT`, `UNLINK_SHIFT`), `original_value`, `corrected_value`, `before`/`after` (jornada completa), `reason` (`CHECK` no vacío), `corrected_by`, `corrected_at`. Trigger: **nadie corrige su propia jornada** (la membresía del corrector ligada a esa ficha de empleado ⇒ rechazo).
+`branch_id` (donde ocurrió la jornada), `employee_id`, `work_session_id`, `break_id`, `incident_id`, `action` (`CREATE_SESSION`, `SET_CLOCK_IN`, `SET_CLOCK_OUT`, `SET_BREAK_START`, `SET_BREAK_END`, `LINK_SHIFT`, `UNLINK_SHIFT`, `ADD_BREAK` desde `0009`), `original_value`, `corrected_value`, `before`/`after` (jornada completa), `reason` (`CHECK` no vacío), `corrected_by`, `corrected_at`, `request_id` (desde `0009`: la solicitud aprobada que la originó; FK compuesta y `UNIQUE`). Trigger: **nadie corrige su propia jornada** (la membresía del corrector ligada a esa ficha de empleado ⇒ rechazo).
+
+### `correction_requests` — solicitudes de corrección (Fase 4, `0009`, D-70/D-71)
+`branch_id` (donde ocurrió), `employee_id`, `operational_date`, `action` (`SET_CLOCK_IN`, `SET_CLOCK_OUT`, `SET_BREAK_START`, `SET_BREAK_END`, `ADD_BREAK`, `CREATE_SESSION`), objetivo (`work_session_id`, `break_id`, `shift_id`, `incident_id`), lo solicitado (`proposed_start` obligatorio, `proposed_end`, `proposed_local` = fecha/hora local tal como se capturó y la zona), `reason` (1–500), `channel` (`KIOSK` con `requested_device_id` / `PANEL` con `requested_by_user_id`), `client_request_id` (idempotencia por dispositivo o usuario), `status` (`PENDING` → `APPROVED` | `REJECTED` | `CANCELLED`), `decided_by`, `decided_at`, `decision_reason` (obligatorio al rechazar), `correction_id` (obligatorio al aprobar), `session_version_at_request`, `version`.
+```sql
+-- columnas obligatorias por acción (CHECK request_target / request_interval) y UNA pendiente igual, sin huecos por NULL:
+UNIQUE (organization_id, work_session_id, action) WHERE status='PENDING' AND action IN ('SET_CLOCK_IN','SET_CLOCK_OUT')
+UNIQUE (organization_id, break_id, action)        WHERE status='PENDING' AND action IN ('SET_BREAK_START','SET_BREAK_END')
+UNIQUE (organization_id, work_session_id)         WHERE status='PENDING' AND action = 'ADD_BREAK'
+UNIQUE (organization_id, shift_id)                WHERE status='PENDING' AND action = 'CREATE_SESSION' AND shift_id IS NOT NULL
+UNIQUE (organization_id, employee_id, operational_date) WHERE status='PENDING' AND action='CREATE_SESSION' AND shift_id IS NULL
+-- FK compuesta del turno (organization_id, shift_id, employee_id, branch_id): solo un turno PROPIO de esa sucursal
+-- trigger guard_request_insert: el operational_date coincide con el de la jornada/turno (REQUEST_DATE_MISMATCH)
+-- trigger guard_request_update: solo transiciones desde PENDING, contenido inmutable (REQUEST_ALREADY_DECIDED);
+--   nadie decide su propia solicitud: ni la ficha ligada al decisor ni quien la registró (SELF_APPROVAL_FORBIDDEN)
+```
+RLS forzado; `app_user` con `SELECT`/`INSERT` y `UPDATE` **solo** sobre las columnas de decisión; sin `DELETE`.
+
+### Avisos en tiempo real (Fase 4, `0009`, D-75)
+`attendance.notify_change()` en `AFTER INSERT OR UPDATE` de `work_sessions`, `breaks`, `incidents` y `correction_requests`: `pg_notify('att_<organization_id sin guiones>', '{"k":…,"id":…,"b":<branch_id>,"op":…}')`. Es **transaccional** (solo se emite si la transacción confirma) y no lleva datos personales: es una invalidación; la fuente de verdad sigue siendo la consulta con RLS.
 
 ### Valores derivados (se calculan, no se guardan)
-Diferencia de llegada (D-41) y de salida (D-65), duración real (D-64), minutos y exceso acumulados de pausas, estado de llegada (D-43) y estados del tablero (D-60).
+Diferencia de llegada (D-41) y de salida (D-65), duración real (D-64), minutos y exceso acumulados de pausas, estado de llegada (D-43) y estados del tablero (D-60). Los reportes (D-73) se calculan al momento desde estas mismas tablas (no hay tablas de reportes ni archivos guardados).
+
+`work_sessions.policy_snapshot` congela desde la Fase 4 también `requireBreak`, `breakRequiredAfterMin`, `exitToleranceMin`, además de tolerancias y pausa (precisión D); las jornadas históricas usan la política actual solo para las claves que no tienen.
 
 ## 9. Casos difíciles
 
@@ -278,6 +305,11 @@ Diferencia de llegada (D-41) y de salida (D-65), duración real (D-64), minutos 
 | Mismo PIN en dos negocios | Permitido (único por negocio; el hash incluye `organization_id`) |
 | Política de empleado | Solo el override; efectivo calculado |
 | Baja de empleado | `INACTIVE`, `pin_hash = NULL` (CHECK), historial intacto |
+| Turno con FALTA se cancela o reasigna | FALTA `VOIDED` por trigger (origen sistema, motivo, auditoría); nunca se borra; no cuenta en totales |
+| Cancelación del turno mientras corre la reconciliación | `FOR SHARE` del turno + guarda `FALTA_NOT_APPLICABLE` + `SAVEPOINT`: nunca queda una FALTA abierta de un turno cancelado |
+| Dos solicitudes iguales a la vez | índice único parcial por acción ⇒ una sola `PENDING` (`REQUEST_ALREADY_PENDING`) |
+| Encargado aprueba su propia solicitud | trigger `guard_request_update` (además de la validación del servicio) |
+| Kiosco robado con cookie vigente | "Revocar ahora" anula la credencial; la siguiente petición recibe `KIOSK_TOKEN_INVALID` |
 
 ## 10. Procesos programados (Fase 3)
 
