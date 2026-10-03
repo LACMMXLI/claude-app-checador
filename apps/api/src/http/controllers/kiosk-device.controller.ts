@@ -9,6 +9,7 @@ import type { KioskIdentity } from '../../modules/auth/kiosk-devices.service.js'
 import { readCookie } from '../request-auth.js';
 import { CONTAINER, HTTP_CONFIG, type HttpConfig, kioskCookieName } from '../tokens.js';
 import { parse } from '../validation.js';
+import { clientIp } from '../client-ip.js';
 
 const activateSchema = z.object({ credential: z.string().trim().min(6).max(200), deviceName: z.string().trim().min(1).max(80).optional() });
 const identifySchema = z.object({ pin: z.string().max(12) });
@@ -75,7 +76,7 @@ export class KioskDeviceController {
     try {
       const identity = await this.c.kiosks.authenticate(token);
       if (!req.header('authorization')) this.setCookie(res, token); // renovación deslizante
-      await this.c.kiosks.touch(this.c.kiosks.contextFor(identity), identity.deviceId, req.ip); // último uso (D-76)
+      await this.c.kiosks.touch(this.c.kiosks.contextFor(identity), identity.deviceId, clientIp(req)); // último uso (D-76), IP de D-79
       return identity;
     } catch (error) {
       if (!req.header('authorization')) this.clearCookie(res);
@@ -111,7 +112,7 @@ export class KioskDeviceController {
   @HttpCode(200)
   async identify(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     const identity = await this.device(req, res);
-    const ctx = this.c.kiosks.contextFor(identity, { ip: req.ip });
+    const ctx = this.c.kiosks.contextFor(identity, { ip: clientIp(req) ?? undefined });
     return this.c.kioskAttendance.identify(ctx, identity, parse(identifySchema, body).pin);
   }
 
@@ -120,7 +121,7 @@ export class KioskDeviceController {
   @HttpCode(200)
   async punch(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     const identity = await this.device(req, res);
-    const ctx = this.c.kiosks.contextFor(identity, { ip: req.ip });
+    const ctx = this.c.kiosks.contextFor(identity, { ip: clientIp(req) ?? undefined });
     const input = parse(punchSchema, body);
     return this.c.kioskAttendance.punch(ctx, identity, { ...input, action: input.action as (typeof PUNCH_ACTIONS)[number] });
   }
@@ -130,7 +131,7 @@ export class KioskDeviceController {
   @HttpCode(200)
   async myRecords(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
     const identity = await this.device(req, res);
-    return this.c.kioskAttendance.myRecords(this.c.kiosks.contextFor(identity, { ip: req.ip }), identity, parse(ticketSchema, body).ticket);
+    return this.c.kioskAttendance.myRecords(this.c.kiosks.contextFor(identity, { ip: clientIp(req) ?? undefined }), identity, parse(ticketSchema, body).ticket);
   }
 
   /** Solicitar una corrección (D-70): nunca modifica la jornada; queda PENDIENTE de aprobación. Idempotente. */
@@ -140,7 +141,7 @@ export class KioskDeviceController {
     const identity = await this.device(req, res);
     const { ticket, ...input } = parse(requestSchema, body);
     // la sucursal de una jornada no registrada sin turno es la del kiosco (donde está físicamente el empleado)
-    return this.c.kioskAttendance.requestCorrection(this.c.kiosks.contextFor(identity, { ip: req.ip }), identity, ticket, {
+    return this.c.kioskAttendance.requestCorrection(this.c.kiosks.contextFor(identity, { ip: clientIp(req) ?? undefined }), identity, ticket, {
       ...input,
       action: input.action as RequestAction,
       branchId: input.action === 'CREATE_SESSION' && !input.shiftId ? identity.branchId : null,
@@ -151,6 +152,6 @@ export class KioskDeviceController {
   @HttpCode(200)
   async cancelRequest(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
     const identity = await this.device(req, res);
-    return this.c.kioskAttendance.cancelRequest(this.c.kiosks.contextFor(identity, { ip: req.ip }), identity, parse(ticketSchema, body).ticket, id);
+    return this.c.kioskAttendance.cancelRequest(this.c.kiosks.contextFor(identity, { ip: clientIp(req) ?? undefined }), identity, parse(ticketSchema, body).ticket, id);
   }
 }

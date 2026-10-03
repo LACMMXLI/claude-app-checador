@@ -261,7 +261,7 @@ export class KioskDevicesService {
   }
 
   /** Último uso del dispositivo (a lo más una escritura por minuto: el kiosco consulta seguido). */
-  async touch(ctx: TenantContext, deviceId: string, ip?: string): Promise<void> {
+  async touch(ctx: TenantContext, deviceId: string, ip?: string | null): Promise<void> {
     await this.tenantDb.run(ctx, (tx) =>
       tx
         .update(kioskDevices)

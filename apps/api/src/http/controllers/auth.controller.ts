@@ -7,6 +7,7 @@ import { SESSION_TTL_SECONDS, SessionsService } from '../../modules/auth/session
 import { RequestAuth } from '../request-auth.js';
 import { CONTAINER, HTTP_CONFIG, type HttpConfig, sessionCookieName } from '../tokens.js';
 import { parse } from '../validation.js';
+import { clientIp } from '../client-ip.js';
 
 const loginSchema = z.object({ email: z.string().trim().min(3).max(320), password: z.string().min(1).max(1024) });
 const switchSchema = z.object({ organizationId: z.string().uuid() });
@@ -63,7 +64,7 @@ export class AuthController {
     const input = parse(loginSchema, body);
     const { token, session } = await this.c.sessions.login(input.email, input.password, {
       previousToken: this.auth.token(req),
-      ip: req.ip ?? null,
+      ip: clientIp(req),
       userAgent: req.header('user-agent') ?? null,
     });
     this.setCookie(res, token); // identificador NUEVO tras el login (rotación)

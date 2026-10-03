@@ -170,6 +170,7 @@ Motivo obligatorio ⇒ misma organización (RLS), sucursal donde ocurrió la jor
 | Plataforma | CLI con `platform_ops`; credenciales fuera de la API |
 
 - **PIN:** aleatorio criptográfico, sin triviales; valor indexable `HMAC-SHA256(PIN_PEPPER, organization_id + ":" + PIN)` (único por negocio, sin correlación entre negocios); se muestra una vez; el empleado no lo cambia; restablecer invalida el anterior; auditoría y logs sin el PIN; **pausa corta y progresiva por dispositivo (D-21)**: 10 s → … → tope 120 s, nunca bloqueos largos del kiosco compartido.
+- **IP del cliente (D-79):** solo informativa (auditoría, sesiones, última IP del kiosco). La API cree en `X-Forwarded-For` únicamente desde redes de `TRUSTED_PROXIES` y hasta `TRUSTED_PROXY_HOPS` saltos; un helper único (`clientIp`) la calcula para todos.
 - **Secretos** solo como variables de entorno en Coolify. **HTTPS** por el proxy. **Hora:** servidor en UTC. Mensajes de error genéricos para PIN y credenciales.
 
 ## 8. Kiosco (UX, Fases 3–4)

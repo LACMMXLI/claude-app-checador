@@ -8,7 +8,7 @@ Plataforma para control de asistencia de negocios con varias sucursales: kiosco 
 
 | Documento | Contenido |
 |---|---|
-| [`docs/00-decisiones.md`](docs/00-decisiones.md) | Registro de decisiones (D-1 … D-78) |
+| [`docs/00-decisiones.md`](docs/00-decisiones.md) | Registro de decisiones (D-1 … D-79) |
 | [`docs/01-reglas-de-negocio.md`](docs/01-reglas-de-negocio.md) | Reglas de negocio v1.5 (RN-xxx) |
 | [`docs/02-modelo-de-datos.md`](docs/02-modelo-de-datos.md) | Modelo PostgreSQL v1.5, aislamiento por negocio (RLS) |
 | [`docs/03-arquitectura.md`](docs/03-arquitectura.md) | Arquitectura v1.5, seguridad, despliegue, tiempo real, fases |

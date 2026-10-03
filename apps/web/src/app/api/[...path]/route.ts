@@ -15,6 +15,9 @@ async function proxy(req: Request, ctx: { params: Promise<{ path: string[] }> })
     const v = req.headers.get(h);
     if (v) headers.set(h, v);
   }
+  // D-79: se reenvía la cadena X-Forwarded-For tal cual. Delante está Traefik (que pone la IP del cliente); si no viene
+  // ninguna, Next.js la completa con el par TCP. La API decide cuánto de ella creer (TRUSTED_PROXIES/TRUSTED_PROXY_HOPS);
+  // X-Real-IP y Forwarded no se reenvían a propósito.
   const fwd = req.headers.get('x-forwarded-for');
   if (fwd) headers.set('x-forwarded-for', fwd);
   let res: Response;

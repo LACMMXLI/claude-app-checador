@@ -3,12 +3,16 @@ import { createHttpApp } from './app.module.js';
 import { optionalEnv, requireEnv, requirePinPepper } from './config/env.js';
 import { createContainer } from './container.js';
 import { createPool } from './db/pool.js';
+import { trustedProxyConfigFromEnv } from './http/client-ip.js';
 
 const pool = createPool(requireEnv('DATABASE_URL'));
 const container = createContainer({ appPool: pool, pinPepper: requirePinPepper() });
 const secureCookies = optionalEnv('COOKIE_SECURE', process.env.NODE_ENV === 'production' ? 'true' : 'false') === 'true';
 
-const app = await createHttpApp({ pool, container, http: { secureCookies } });
+// D-79: proxies confiables (TRUSTED_PROXIES / TRUSTED_PROXY_HOPS); una entrada inválida detiene el arranque
+const trustedProxies = trustedProxyConfigFromEnv();
+
+const app = await createHttpApp({ pool, container, http: { secureCookies, trustedProxies } });
 
 // Reconciliación de asistencia DENTRO de la API (opcional; por defecto apagada). Alternativa: tarea programada
 // de Coolify que ejecute `node dist/src/cli/reconcile.js`. Es idempotente: ambas pueden convivir.

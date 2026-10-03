@@ -43,6 +43,8 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
     - Dentro de la API: `RECONCILE_INTERVAL_SEC=300`.
     La salida es una línea JSON con lo procesado (`absences`, `forgottenExits`, `longOpenSessions`, `openBreaks`, `errors`); termina con código 1 si algún negocio falló.
 
+11. **IP real del cliente (D-79).** Con este `docker-compose.yml` no hay que hacer nada: la API confía solo en su par de la red interna (`TRUSTED_PROXIES=loopback,uniquelocal`, `TRUSTED_PROXY_HOPS=1`) y registra la IP que puso Traefik. Requisitos: publicar **solo** `web` con dominio en Coolify (Traefik delante), sin `ports` en `web` ni en `api`. Con un CDN/proxy extra delante de Traefik (p. ej. Cloudflare en modo proxy): configurar en Traefik de Coolify `forwardedHeaders.trustedIPs` con los rangos del CDN, y en la API agregar esos rangos a `TRUSTED_PROXIES` y usar `TRUSTED_PROXY_HOPS=2`. Para comprobarlo: Panel → Kioscos → "Última IP" debe mostrar la IP pública de la sucursal, no una `10.x`/`172.x`. La IP es solo informativa: nunca autentica ni autoriza.
+
 ## 2.1 Antes de producción
 
 - Validación en el servidor (Coolify): construir `apps/api/Dockerfile` y `apps/web/Dockerfile`, `docker compose up` con base limpia, migraciones (`init`), API sana (`/health`), panel por HTTPS con cookie `__Host-sid`, persistencia y reinicios.

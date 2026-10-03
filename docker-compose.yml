@@ -44,6 +44,11 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}   # cookies __Host-sid / __Host-kiosk con Secure: el panel debe servirse por HTTPS
       # Reconciliación de asistencia dentro de la API cada N segundos (0 = apagada; ver servicio `reconcile`)
       RECONCILE_INTERVAL_SEC: ${RECONCILE_INTERVAL_SEC:-0}
+      # IP real del cliente (D-79; solo informativa: auditoría, sesiones, "última IP" del kiosco). La API solo es
+      # accesible por la red interna, así que su par es el contenedor `web` (red privada). Se confía en UN salto:
+      # el X-Forwarded-For que puso Traefik y reenvió `web`. Lo que un cliente agregue más a la izquierda se ignora.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-loopback,uniquelocal}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
       NODE_ENV: production
       TZ: UTC
     expose: ["3000"]
@@ -55,7 +60,8 @@ services:
       start_period: 15s
 
   # Panel web (Next.js). Es el ÚNICO servicio que se publica con dominio en Coolify; reenvía /api a la API
-  # por la red interna, así la cookie de sesión es de primera parte.
+  # por la red interna, así la cookie de sesión es de primera parte. Debe quedar detrás de Traefik (`expose`, nunca
+  # `ports`): la IP real del cliente (D-79) depende de que el X-Forwarded-For lo ponga Traefik.
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     restart: unless-stopped

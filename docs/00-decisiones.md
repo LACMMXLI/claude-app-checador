@@ -1,6 +1,6 @@
 # 00 · Registro de decisiones
 
-Todas las decisiones funcionales actuales están **cerradas** (reglas v1.5 y modelo v1.5 congelados; D-1 … D-78). Contrato de la Fase 4: `05-fase-4-contrato.md`. Un cambio posterior se anota aquí con fecha y motivo.
+Todas las decisiones funcionales actuales están **cerradas** (reglas v1.5 y modelo v1.5 congelados; D-1 … D-79). Contrato de la Fase 4: `05-fase-4-contrato.md`. Un cambio posterior se anota aquí con fecha y motivo.
 
 | # | Decisión | Reglas |
 |---|---|---|
@@ -85,7 +85,16 @@ Todas las decisiones funcionales actuales están **cerradas** (reglas v1.5 y mod
 | **D-75** | **Tiempo real (SSE)**: eventos de invalidación sin datos personales; el cliente recarga por los endpoints con RBAC/RLS; canal por negocio; polling de respaldo. Perder un aviso no afecta la consistencia. | RN-RT-* |
 | **D-76** | **Kioscos**: `activated_at`, `last_seen_at`, estado del dispositivo y revocación inmediata; la cookie larga no da acceso sin la validación del servidor en cada petición. | RN-PIN-09 |
 | **D-78** | **Un solo día operativo para toda la asistencia** (ajusta D-27 y D-46 en lo que toca a asistencia). Mientras no llega la hora de corte del negocio/sucursal (política `operational_cutoff`, en su zona IANA efectiva; Fatboy: America/Tijuana, 05:00), todo pertenece al día operativo ANTERIOR: 02-oct 23:30 ⇒ 02-oct · 03-oct 01:30 ⇒ 02-oct · 03-oct 04:59:59 ⇒ 02-oct · 03-oct 05:00:00 ⇒ 03-oct. El **turno** pertenece al día operativo de su inicio (`shifts.operational_date`); una jornada ligada a un turno, al del turno; una jornada sin turno, al de su Entrada; la FALTA y las solicitudes, al de su turno o jornada. Aplica a asistencia en vivo, jornadas, incidencias, reconciliación, solicitudes y correcciones, reportes, exportaciones y todo filtro "hoy". **Nunca cambian los instantes reales**, solo la fecha con la que se agrupa y consulta. La hora de corte nunca está fija en el código. `business_date` queda solo como fecha de planeación (columna del horario semanal). | RN-ASI-11, RN-ASI-20, RN-RT-01, RN-REP-01 |
+| **D-79** | **IP real del cliente detrás de proxies** (seguridad/operación; no cambia reglas de negocio). La IP es SOLO informativa (auditoría, sesiones, `last_seen_ip` del kiosco): nunca autentica, autoriza, identifica sucursal ni aplica reglas; la identidad del kiosco sigue siendo `device_id` + credencial secreta. La API solo cree en `X-Forwarded-For` si el salto viene de una red de `TRUSTED_PROXIES` y nunca más allá de `TRUSTED_PROXY_HOPS` saltos (por defecto, sin configuración: ninguno). Un único helper (`clientIp`) alimenta auditoría, sesiones y `last_seen_ip`. | RN-AUD-02, RN-KIO-01 |
 | **D-77** | **Aislamiento SaaS** de todo recurso nuevo (tablas, endpoints, consultas, reportes, SSE, exportaciones): `organization_id` + FKs compuestas + RLS + verificación de catálogo + pruebas A↔B. | RN-ORG-* |
+
+## Decisiones técnicas de D-79 (IP real del cliente)
+
+- **Camino real:** cliente → Traefik (Coolify) → `web` (Next.js, proxy `/api`) → `api`. Traefik pone en `X-Forwarded-For` la IP de quien lo contactó (y por defecto descarta la que mande un cliente no confiable). Next.js reenvía la cabecera tal cual y solo la completa con el par TCP cuando no viene (verificado: si el cliente manda una, Next.js NO agrega su par). Por eso la decisión de cuánto creer vive en la API.
+- **Antes:** `trust proxy = 1` fijo: se confiaba en el par TCP fuera quien fuera. Si la API o `web` quedaran expuestos sin Traefik, un navegador podía dictar la IP registrada.
+- **Ahora:** `trust proxy` es una función `(dirección, salto) ⇒ salto < TRUSTED_PROXY_HOPS ∧ dirección ∈ TRUSTED_PROXIES` (`http/client-ip.ts`, con `net.BlockList`, sin dependencias nuevas). Se recorre la cadena de derecha a izquierda y se detiene en el primer salto no confiable o al agotar los saltos; lo que el cliente escriba a la izquierda nunca se usa. Entradas inválidas detienen el arranque.
+- **Valores por defecto:** en la aplicación, ninguno (IP del par TCP). En `docker-compose.yml`: `loopback,uniquelocal` y 1 salto (el par de la API solo puede ser `web`, en la red interna privada). No hay direcciones de un servidor concreto.
+- **Un solo helper:** `clientIp(req)` (normaliza `::ffff:` y acota a 64 caracteres) para auditoría (`ctx.ip`), sesiones del panel y `last_seen_ip`. `X-Real-IP` y `Forwarded` no se usan ni se reenvían.
 
 ## Decisiones técnicas de D-78 (día operativo canónico)
 

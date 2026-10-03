@@ -1,3 +1,5 @@
+import type { TrustedProxyConfig } from './client-ip.js';
+
 export const CONTAINER = Symbol('CONTAINER');
 export const PG_POOL = Symbol('PG_POOL');
 export const HTTP_CONFIG = Symbol('HTTP_CONFIG');
@@ -7,6 +9,8 @@ export interface HttpConfig {
   secureCookies: boolean;
   /** Tiempos del SSE (D-75); configurables para pruebas. */
   sse?: Partial<SseConfig>;
+  /** D-79: proxies confiables para obtener la IP real del cliente. Sin valor: no se confía en ninguno. */
+  trustedProxies?: TrustedProxyConfig;
 }
 
 export interface SseConfig {

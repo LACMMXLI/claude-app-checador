@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import type { Pool } from 'pg';
 import type { Container } from './container.js';
+import { trustProxyFn } from './http/client-ip.js';
 import { AuditController } from './http/controllers/audit.controller.js';
 import { AuthController } from './http/controllers/auth.controller.js';
 import { BranchesController } from './http/controllers/branches.controller.js';
@@ -92,6 +93,7 @@ export async function createHttpApp(options: AppOptions, logger: false | ('log' 
   app.useGlobalFilters(new ErrorsFilter());
   const express = app.getHttpAdapter().getInstance();
   express.disable('x-powered-by');
-  express.set('trust proxy', 1); // detrás del proxy de Coolify
+  // D-79: solo se confía en X-Forwarded-For de proxies propios y hasta N saltos (ver http/client-ip.ts)
+  express.set('trust proxy', trustProxyFn(options.http.trustedProxies ?? { proxies: '', hops: 0 }));
   return app;
 }
