@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { StateBadge } from '@/components/attendance';
-import { Card, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
 import Link from 'next/link';
 import { api, type CorrectionRequest, personName, type SessionDetail } from '@/lib/api';
 import { dateTimeIn, localParts, minutesLabel, shiftLabel, signedMinutes, timeIn } from '@/lib/format';
@@ -133,7 +133,7 @@ export default function SessionDetailPage() {
       </Card>
 
       <Card title={t('att.breaks')}>
-        {d.breaks.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {d.breaks.length === 0 ? <Empty /> : (
           <table>
             <thead><tr><th>#</th><th>{t('kiosk.action.BREAK_START')}</th><th>{t('kiosk.action.BREAK_END')}</th><th>{t('schedule.duration')}</th><th>{t('att.breakExcess')}</th></tr></thead>
             <tbody>
@@ -149,7 +149,7 @@ export default function SessionDetailPage() {
       </Card>
 
       <Card title={t('att.incidents')}>
-        {d.incidents.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {d.incidents.length === 0 ? <Empty /> : (
           <>
             <table>
               <tbody>
@@ -223,7 +223,7 @@ export default function SessionDetailPage() {
       </Card>
 
       <Card title={t('att.corrections')}>
-        {d.corrections.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {d.corrections.length === 0 ? <Empty /> : (
           <table data-testid="corrections">
             <thead><tr><th>{t('audit.when')}</th><th>{t('att.correct.action')}</th><th>{t('att.correct.original')}</th><th>{t('att.correct.corrected')}</th><th>{t('att.correct.by')}</th><th>{t('common.reason')}</th></tr></thead>
             <tbody>

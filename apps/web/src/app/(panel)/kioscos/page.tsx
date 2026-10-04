@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useState } from 'react';
-import { Card, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch } from '@/lib/api';
 import { t } from '@/lib/i18n';
 
@@ -69,7 +69,7 @@ export default function KiosksPage() {
         </form>
       </Card>
       <Card>
-        {!data ? <Loading /> : data.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {!data ? <Loading /> : data.length === 0 ? <Empty /> : (
           <table>
             <thead><tr><th>{t('common.name')}</th><th>{t('common.branch')}</th><th>{t('kiosks.state')}</th><th>{t('kiosks.token')}</th><th>{t('kiosks.activatedAt')}</th><th>{t('kiosks.lastSeen')}</th><th>{t('common.status')}</th><th>{t('common.actions')}</th></tr></thead>
             <tbody>

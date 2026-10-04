@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useBranches } from '@/components/attendance';
-import { Card, ErrorBox, Field, Loading, useAction } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, useAction } from '@/components/ui';
 import { api, download, type Employee, type PeriodKey, type ReportKind, type ReportTable } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -119,7 +119,7 @@ export default function ReportsPage() {
       <ErrorBox message={query.error ?? exporting.error} />
       {query.busy && !table ? <Loading /> : table && (
         <Card title={`${t(`reports.kind.${table.report}`)} · ${table.from} → ${table.to} · ${table.rows.length} ${t('reports.rows')}`}>
-          {table.rows.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+          {table.rows.length === 0 ? <Empty /> : (
             <>
               <table data-testid="report-table">
                 <thead><tr>{table.columns.map((c) => <th key={c.key}>{c.header}</th>)}</tr></thead>

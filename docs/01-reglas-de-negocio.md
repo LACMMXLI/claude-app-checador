@@ -273,7 +273,7 @@ La zona horaria **no es una política**: es un atributo del negocio (obligatorio
 
 - **RN-IDN-01** La **identidad y credenciales pertenecen a la plataforma** (usuario global).
 - **RN-IDN-02** El administrador de un negocio **puede activar, desactivar o quitar la membresía** de su negocio. **No puede ver la contraseña ni cambiar directamente la contraseña global** (la misma cuenta puede pertenecer a otros negocios). Solo ve a los usuarios que son miembros de su negocio.
-- **RN-IDN-03** Mientras no exista recuperación automática, el **restablecimiento global lo realiza la plataforma**. La **recuperación por correo** queda preparada para una fase posterior.
+- **RN-IDN-03** Mientras no exista recuperación automática, el **restablecimiento global lo realiza la plataforma**; además, **cada persona puede cambiar su propia contraseña** desde "Mi cuenta" probando la actual (D-80): se cierran sus demás sesiones y se audita sin la contraseña. La **recuperación por correo** queda preparada para una fase posterior.
 - **RN-IDN-04** Login: correo + contraseña. Si el usuario pertenece a un negocio entra directo; si pertenece a varios, **elige negocio**. El negocio queda fijado en la sesión.
 - **RN-IDN-05** Cada negocio debe tener siempre al menos un administrador activo.
 - **RN-IDN-06** Cambios de rol, permiso, alcance o membresía se auditan.

@@ -11,6 +11,7 @@ import { clientIp } from '../client-ip.js';
 
 const loginSchema = z.object({ email: z.string().trim().min(3).max(320), password: z.string().min(1).max(1024) });
 const switchSchema = z.object({ organizationId: z.string().uuid() });
+const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(1024), newPassword: z.string().min(1).max(1024) });
 const acceptSchema = z.object({ password: z.string().min(1).max(1024), displayName: z.string().trim().max(120).optional() });
 
 @Controller('auth')
@@ -76,6 +77,20 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.c.sessions.logout(this.auth.token(req));
     this.clearCookie(res);
+  }
+
+  /**
+   * D-80 · Cambiar la PROPIA contraseña. Exige la actual; las demás sesiones de la persona se cierran y esta se conserva.
+   * Aplica a cualquier persona con sesión (no depende de un negocio ni de permisos: nadie cambia la de otra persona).
+   */
+  @Post('change-password')
+  @HttpCode(200)
+  async changePassword(@Req() req: Request, @Body() body: unknown) {
+    const session = await this.auth.identity(req);
+    const input = parse(changePasswordSchema, body);
+    const token = this.auth.token(req);
+    const result = await this.c.sessions.changePassword(token ?? '', session, input.currentPassword, input.newPassword);
+    return { ok: true, otherSessionsRevoked: result.otherSessionsRevoked };
   }
 
   @Get('me')

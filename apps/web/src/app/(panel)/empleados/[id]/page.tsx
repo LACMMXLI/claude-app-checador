@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { AttendanceHistory } from '@/components/attendance';
-import { Card, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee, type Shift } from '@/lib/api';
 import { dayLabel, minutesLabel, shiftLabel } from '@/lib/format';
 import { t } from '@/lib/i18n';
@@ -78,7 +78,7 @@ export default function EmployeeDetailPage() {
       </Card>
       {can('schedules.view') && (
         <Card title={t('schedule.upcoming')}>
-          {!upcoming.data ? <Loading /> : upcoming.data.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+          {!upcoming.data ? <Loading /> : upcoming.data.length === 0 ? <Empty /> : (
             <table>
               <thead><tr><th>{t('schedule.date')}</th><th>{t('common.branch')}</th><th>{t('schedule.start')} – {t('schedule.end')}</th><th>{t('schedule.duration')}</th><th>{t('common.status')}</th><th>{t('nav.schedule')}</th></tr></thead>
               <tbody>

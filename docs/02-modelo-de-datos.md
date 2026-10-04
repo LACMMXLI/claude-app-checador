@@ -1,7 +1,7 @@
 # 02 · Modelo de datos (PostgreSQL) — multi-negocio
 
 > **Versión 1.5 — CONGELADA** (D-78). Deriva de `01-reglas-de-negocio.md`.
-> Estado de implementación: **Fases 0 a 4 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`, `attendance`; migraciones `0001`–`0011` en `apps/api/db/migrations`). Las migraciones aplicadas nunca se modifican: cada cambio es una migración incremental.
+> Estado de implementación: **Fases 0 a 4 implementadas** (esquemas `platform`, `auth`, `core`, `audit`, `scheduling`, `attendance`; migraciones `0001`–`0012` en `apps/api/db/migrations`). Las migraciones aplicadas nunca se modifican: cada cambio es una migración incremental.
 
 ## 1. Convenciones
 

@@ -8,6 +8,10 @@ export class ApiError extends Error {
   }
 }
 
+/** Cuántas peticiones que MODIFICAN datos (no GET) han terminado bien. Permite avisar "listo" solo cuando de verdad se guardó algo. */
+let mutations = 0;
+export const mutationCount = () => mutations;
+
 export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const method = init.method ?? 'GET';
   const res = await fetch(`/api${path}`, {
@@ -20,9 +24,13 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) {
+    if (method !== 'GET' && res.ok) mutations += 1;
+    return undefined as T;
+  }
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'HTTP_ERROR', data?.error?.details ?? {});
+  if (method !== 'GET') mutations += 1;
   return data as T;
 }
 

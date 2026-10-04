@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IncidentChips, StateBadge, useBranches } from '@/components/attendance';
-import { Card, ErrorBox, Field, Loading } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading } from '@/components/ui';
 import { api, type Board, personName } from '@/lib/api';
 import { shiftLabel, signedMinutes, timeIn } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
@@ -93,14 +93,14 @@ export default function LiveAttendancePage() {
         <>
           <div className="counters" data-testid="counters">
             {COUNTERS.map((c) => (
-              <button key={c.key} className={`counter ${filter === c.key ? 'selected' : ''}`} onClick={() => setFilter(filter === c.key ? null : c.key)} data-testid={`counter-${c.key}`}>
+              <button key={c.key} data-key={c.key} className={`counter ${filter === c.key ? 'selected' : ''}`} onClick={() => setFilter(filter === c.key ? null : c.key)} data-testid={`counter-${c.key}`}>
                 <strong>{board.counters[c.key] ?? 0}</strong>
                 {t(`live.counter.${c.key}`)}
               </button>
             ))}
           </div>
           <Card title={`${board.branch.name} · ${board.operationalDate}`}>
-            {rows.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+            {rows.length === 0 ? <Empty /> : (
               <table>
                 <thead>
                   <tr>

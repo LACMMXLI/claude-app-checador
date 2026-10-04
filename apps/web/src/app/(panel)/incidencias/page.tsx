@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { shiftDate, useBranches, useOperationalToday } from '@/components/attendance';
-import { Card, ErrorBox, Field, Loading, useAction } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, useAction } from '@/components/ui';
 import { api, type Incident, personName, type PersonRef, type ShiftSummary } from '@/lib/api';
 import { dateTimeIn, shiftLabel } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
@@ -132,7 +132,7 @@ export default function IncidentsPage() {
       )}
 
       <Card>
-        {!rows ? <Loading /> : rows.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {!rows ? <Loading /> : rows.length === 0 ? <Empty /> : (
           <table data-testid="incidents">
             <thead>
               <tr><th>{t('incident.date')}</th><th>{t('att.employee')}</th><th>{t('common.branch')}</th><th>{t('att.incidents')}</th><th>{t('att.shift')}</th><th>{t('common.status')}</th><th>{t('audit.when')}</th><th /></tr>

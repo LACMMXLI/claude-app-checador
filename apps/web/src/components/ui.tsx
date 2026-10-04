@@ -1,8 +1,10 @@
 'use client';
 
 import { cloneElement, type ReactElement, type ReactNode, useCallback, useEffect, useId, useState } from 'react';
-import { ApiError } from '@/lib/api';
+import { ApiError, mutationCount } from '@/lib/api';
 import { errorText, t } from '@/lib/i18n';
+import { notify } from '@/lib/toast';
+import { Icon, type IconName } from './icons';
 
 export function useLoad<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -22,15 +24,22 @@ export function useLoad<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   return { data, error, reload };
 }
 
-/** Ejecuta una acción y traduce el error a texto (códigos estables de la API). */
+/**
+ * Ejecuta una acción y traduce el error a texto (códigos estables de la API). Si la acción responde con datos, avisa con
+ * un mensaje flotante de éxito si modificó datos (`okMessage` lo personaliza; `false` lo omite).
+ */
 export function useAction() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+  const run = useCallback(async <T,>(fn: () => Promise<T>, okMessage?: string | false): Promise<T | undefined> => {
     setBusy(true);
     setError(null);
     try {
-      return await fn();
+      const before = mutationCount();
+      const result = await fn();
+      // solo avisa si la acción realmente modificó datos (una consulta no es "guardar")
+      if (result !== undefined && okMessage !== false && mutationCount() > before) notify('success', okMessage ?? t('toast.done'));
+      return result;
     } catch (e) {
       setError(errorText(e instanceof ApiError ? e.code : undefined));
       return undefined;
@@ -54,17 +63,45 @@ export function Field({ label, children }: { label: string; children: ReactEleme
   );
 }
 
-export function Card({ title, actions, children }: { title?: string; actions?: ReactNode; children: ReactNode }) {
+export function Card({ title, actions, children, icon }: { title?: string; actions?: ReactNode; children: ReactNode; icon?: IconName }) {
   return (
     <section className="card">
       {(title || actions) && (
         <header className="card-header">
-          {title && <h2>{title}</h2>}
+          {title && (
+            <h2>
+              {icon && <span className="card-icon"><Icon name={icon} size={18} /></span>}
+              {title}
+            </h2>
+          )}
           {actions}
         </header>
       )}
       {children}
     </section>
+  );
+}
+
+/** Campo de contraseña con botón para ver/ocultar. El botón NO se llama "contraseña" para no chocar con la etiqueta. */
+export function PasswordInput({ id, ...rest }: { id?: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'id'>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="password-input">
+      <input id={id} type={visible ? 'text' : 'password'} {...rest} />
+      <button type="button" className="icon-btn" aria-label={visible ? 'Ocultar texto' : 'Ver texto'} aria-pressed={visible} onClick={() => setVisible((v) => !v)}>
+        <Icon name={visible ? 'eyeOff' : 'eye'} size={18} />
+      </button>
+    </div>
+  );
+}
+
+/** Estado vacío con ilustración sencilla. */
+export function Empty({ text }: { text?: string }) {
+  return (
+    <div className="empty">
+      <span className="empty-icon"><Icon name="empty" size={28} /></span>
+      <p>{text ?? t('common.empty')}</p>
+    </div>
   );
 }
 
@@ -87,6 +124,12 @@ export function Status({ active }: { active: boolean }) {
   return <span className={`badge ${active ? 'ok' : 'off'}`}>{active ? t('common.active') : t('common.inactive')}</span>;
 }
 
+/** Esqueleto con destello mientras carga (el texto queda para lectores de pantalla). */
 export function Loading() {
-  return <p className="muted">{t('common.loading')}</p>;
+  return (
+    <div className="skeleton" role="status" aria-label={t('common.loading')}>
+      <span className="sr-only">{t('common.loading')}</span>
+      <i /><i /><i />
+    </div>
+  );
 }

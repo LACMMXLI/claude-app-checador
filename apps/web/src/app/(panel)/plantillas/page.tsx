@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useEffect, useState } from 'react';
-import { Card, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee } from '@/lib/api';
 import { t } from '@/lib/i18n';
 
@@ -62,7 +62,7 @@ export default function TemplatesPage() {
         </form>
       </Card>
       <Card>
-        {!list.data ? <Loading /> : list.data.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {!list.data ? <Loading /> : list.data.length === 0 ? <Empty /> : (
           <div className="row">{list.data.map((tpl) => <button key={tpl.id} onClick={() => void open(tpl.id)}>{tpl.name}</button>)}</div>
         )}
       </Card>

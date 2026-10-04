@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
-import { Card, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
+import { Card, ErrorBox, Field, Loading, PasswordInput, useAction, useLoad } from '@/components/ui';
 import { api } from '@/lib/api';
 import { t } from '@/lib/i18n';
 
@@ -20,7 +20,7 @@ export default function InvitationPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const ok = await run(() => api(`/auth/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: { password, displayName } }));
+    const ok = await run(() => api(`/auth/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: { password, displayName } }), false);
     setPassword('');
     if (ok) setDone(true);
   }
@@ -41,7 +41,7 @@ export default function InvitationPage() {
               </Field>
             )}
             <Field label={t('login.password')}>
-              <input type="password" autoComplete={data.userExists ? 'current-password' : 'new-password'} required minLength={data.userExists ? 1 : 10} value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput autoComplete={data.userExists ? 'current-password' : 'new-password'} required minLength={data.userExists ? 1 : 10} value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
             <ErrorBox message={error} />
             <button className="primary" disabled={busy}>{t('invitation.accept')}</button>

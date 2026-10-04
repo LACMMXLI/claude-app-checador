@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useState } from 'react';
-import { Card, ErrorBox, Field, Loading, Status, useAction, useLoad } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -53,7 +53,7 @@ export default function BranchesPage() {
         </Card>
       )}
       <Card>
-        {!data ? <Loading /> : data.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {!data ? <Loading /> : data.length === 0 ? <Empty /> : (
           <table>
             <thead><tr><th>{t('common.code')}</th><th>{t('common.name')}</th><th>{t('branches.effectiveTimezone')}</th><th>{t('common.status')}</th>{manage && <th>{t('common.actions')}</th>}</tr></thead>
             <tbody>

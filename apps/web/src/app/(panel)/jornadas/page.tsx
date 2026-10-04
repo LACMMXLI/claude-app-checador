@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { IncidentChips, shiftDate, useBranches, useOperationalToday } from '@/components/attendance';
-import { Card, ErrorBox, Field, Loading } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading } from '@/components/ui';
 import { api, personName, type SessionRow } from '@/lib/api';
 import { minutesLabel, shiftLabel, signedMinutes, timeIn } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
@@ -55,7 +55,7 @@ export default function SessionsPage() {
       </div>
       <ErrorBox message={error} />
       <Card>
-        {!rows ? <Loading /> : rows.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {!rows ? <Loading /> : rows.length === 0 ? <Empty /> : (
           <table>
             <thead>
               <tr>

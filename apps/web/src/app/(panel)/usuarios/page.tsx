@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useState } from 'react';
-import { Card, ErrorBox, Field, Loading, OneTimeSecret, useAction, useLoad } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee } from '@/lib/api';
 import { t } from '@/lib/i18n';
 
@@ -105,7 +105,7 @@ export default function UsersPage() {
         )}
       </Card>
       <Card title={t('users.invitations')}>
-        {!invitations.data ? <Loading /> : invitations.data.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {!invitations.data ? <Loading /> : invitations.data.length === 0 ? <Empty /> : (
           <table>
             <thead><tr><th>{t('login.email')}</th><th>{t('users.scope')}</th><th>{t('common.status')}</th><th /></tr></thead>
             <tbody>

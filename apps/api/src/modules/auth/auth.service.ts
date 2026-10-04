@@ -1,6 +1,6 @@
 import { DomainError } from '../../common/errors.js';
 import type { Gate, MembershipChoice } from '../../common/tenancy/gate.js';
-import { hashPassword, verifyPassword } from './password.js';
+import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from './password.js';
 
 export interface AuthenticationResult {
   userId: string;
@@ -35,5 +35,29 @@ export class AuthService {
     const memberships = await this.gate.listUserMemberships(record.userId);
     if (memberships.length === 0) throw new DomainError('NO_ACTIVE_MEMBERSHIP');
     return { userId: record.userId, memberships, needsOrganizationChoice: memberships.length > 1 };
+  }
+
+  /**
+   * D-80 · Cambio de contraseña por la PROPIA persona. Exige la contraseña actual (con el mismo bloqueo por intentos que
+   * el login), una nueva distinta y de al menos 10 caracteres, y revoca las demás sesiones. Nunca se registra ninguna
+   * contraseña ni hash. El administrador de un negocio no tiene ningún camino a la contraseña de otra persona (RN-IDN-02).
+   */
+  async changePassword(
+    email: string,
+    currentPassword: string,
+    newPassword: string,
+    keepSessionHash: string | null,
+    now: () => Date = () => new Date(),
+  ): Promise<{ otherSessionsRevoked: number }> {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) throw new DomainError('PASSWORD_TOO_SHORT');
+    const record = await this.gate.getLoginRecord(email);
+    if (!record || record.status !== 'ACTIVE') throw new DomainError('CURRENT_PASSWORD_INVALID');
+    if (record.lockedUntil && record.lockedUntil > now()) throw new DomainError('ACCOUNT_LOCKED');
+    const ok = await verifyPassword(record.passwordHash, currentPassword);
+    await this.gate.recordLoginResult(record.userId, ok);
+    if (!ok) throw new DomainError('CURRENT_PASSWORD_INVALID');
+    if (currentPassword === newPassword) throw new DomainError('NEW_PASSWORD_SAME_AS_CURRENT');
+    const revoked = await this.gate.changePassword(record.userId, record.passwordHash, await hashPassword(newPassword), keepSessionHash);
+    return { otherSessionsRevoked: revoked };
   }
 }

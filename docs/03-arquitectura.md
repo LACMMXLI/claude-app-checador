@@ -15,7 +15,7 @@
 | Frontend | **Next.js 16 + React 19**, CSS propio (sin framework visual todavía); panel funcional responsive; textos por **sistema de traducciones** (es-MX). El panel reenvía `/api/*` a la API (proxy del mismo origen) | Fase 1: panel. Fase 3: kiosco táctil (`/kiosco`) y asistencia |
 | Tiempo real | **SSE** (`LISTEN/NOTIFY` de PostgreSQL → `EventSource`), polling de respaldo | Fase 4 |
 | Excel / CSV | `exceljs` 4.4.0 (fijada) · CSV propio (RFC 4180, BOM, fórmulas neutralizadas) | Fase 4 |
-| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel y del kiosco) | 390 pruebas + 12 E2E |
+| Pruebas | Vitest + PostgreSQL real (sin mocks de BD) + Playwright (E2E del panel y del kiosco) | 406 pruebas + 13 E2E |
 | CI | GitHub Actions: typecheck → build → migraciones desde cero → `check:tenancy` → pruebas → smoke | Fase 0 |
 
 **Por qué NestJS y no solo rutas API de Next.js:** módulos que crecerán (mesas, adelantos, nómina, comunicados), procesos en segundo plano con scheduler, tiempo real con estado en memoria, múltiples clientes (kiosco, panel, móvil) y el **contexto de negocio** como pieza transversal y auditable.

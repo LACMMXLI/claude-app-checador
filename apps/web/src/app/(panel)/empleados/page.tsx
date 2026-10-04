@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { type FormEvent, useState } from 'react';
-import { Card, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
+import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -56,7 +56,7 @@ export default function EmployeesPage() {
           <option value="">—</option>
         </select>
       }>
-        {!data ? <Loading /> : data.length === 0 ? <p className="muted">{t('common.empty')}</p> : (
+        {!data ? <Loading /> : data.length === 0 ? <Empty /> : (
           <table>
             <thead><tr><th>{t('employees.number')}</th><th>{t('common.name')}</th><th>{t('employees.primaryBranch')}</th><th>{t('employees.branches')}</th><th>{t('common.status')}</th></tr></thead>
             <tbody>

@@ -65,6 +65,11 @@ export class SessionsService {
     if (token && isTokenShaped(token)) await this.gate.revokeSession(sha256(token));
   }
 
+  /** D-80: cambia la contraseña de quien tiene la sesión `token`; conserva ESA sesión y revoca las demás. */
+  async changePassword(token: string, session: ResolvedSession, currentPassword: string, newPassword: string) {
+    return this.auth.changePassword(session.email, currentPassword, newPassword, isTokenShaped(token) ? sha256(token) : null);
+  }
+
   /** Contexto de negocio derivado de la sesión (nunca de la petición). */
   static tenantContext(session: ResolvedSession, extra: { ip?: string; requestId?: string } = {}): TenantContext {
     if (!session.organizationId) throw new DomainError('NO_ACTIVE_ORGANIZATION');

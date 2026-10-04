@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { LocalInstant, OwnRecords, RequestAction, RequestDraft } from '@/lib/api';
 import { hour12, localParts, shiftLabel, timeIn } from '@/lib/format';
+import { Empty } from '@/components/ui';
 import { t } from '@/lib/i18n';
 
 type Session = OwnRecords['sessions'][number];
@@ -143,7 +144,7 @@ export function MyRecords({
         <>
           <section>
             <h2>{t('mine.sessions')}</h2>
-            {data.sessions.length === 0 && <p className="muted">{t('common.empty')}</p>}
+            {data.sessions.length === 0 && <Empty />}
             <ul className="record-list" data-testid="my-sessions">
               {data.sessions.map((s) => (
                 <li key={s.id} className="record">

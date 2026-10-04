@@ -156,6 +156,21 @@ export class Gate {
     await this.pool.query('SELECT auth.revoke_session($1)', [tokenHash]);
   }
 
+  /**
+   * D-80 · Cambia la contraseña de la propia persona (compare-and-set sobre el hash ya verificado) y revoca sus demás
+   * sesiones. Devuelve cuántas sesiones se revocaron.
+   */
+  async changePassword(userId: string, oldHash: string, newHash: string, keepSessionHash: string | null): Promise<number> {
+    try {
+      const { rows } = await this.pool.query('SELECT auth.change_password($1, $2, $3, $4) AS revoked', [userId, oldHash, newHash, keepSessionHash]);
+      return rows[0].revoked as number;
+    } catch (error) {
+      const code = gateErrorCode(error);
+      if (code) throw new DomainError(code);
+      throw error;
+    }
+  }
+
   // ── Invitaciones ─────────────────────────────────────────────────────────────
   async getInvitation(tokenHash: string): Promise<InvitationPreview | null> {
     const { rows } = await this.pool.query('SELECT * FROM auth.get_invitation($1)', [tokenHash]);
