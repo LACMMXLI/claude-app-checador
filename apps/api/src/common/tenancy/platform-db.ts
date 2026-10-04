@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { Pool } from 'pg';
 import * as schema from '../../db/schema/index.js';
@@ -14,7 +15,14 @@ export class PlatformDb {
     this.db = drizzle(pool, { schema });
   }
 
-  run<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-    return this.db.transaction(fn);
+  /**
+   * `actor` queda en `app.platform_actor` durante la transacción: los triggers de plataforma (historial de
+   * suscripciones) lo registran como responsable del cambio.
+   */
+  run<T>(fn: (tx: Tx) => Promise<T>, options: { actor?: string } = {}): Promise<T> {
+    return this.db.transaction(async (tx) => {
+      if (options.actor) await tx.execute(sql`SELECT set_config('app.platform_actor', ${options.actor}, true)`);
+      return fn(tx);
+    });
   }
 }

@@ -62,6 +62,69 @@ export const platformAuditLog = platform.table('platform_audit_log', {
   details: jsonb('details').notNull().default({}),
 });
 
+export const plans = platform.table('plans', {
+  code: text('code').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  maxBranches: integer('max_branches'),
+  maxEmployees: integer('max_employees'),
+  maxKiosks: integer('max_kiosks'),
+  maxMembers: integer('max_members'),
+  features: jsonb('features').notNull().default({}),
+  sortOrder: integer('sort_order').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const subscriptions = platform.table('subscriptions', {
+  organizationId: uuid('organization_id').primaryKey(),
+  planCode: text('plan_code').notNull(),
+  status: text('status').notNull(),
+  trialEndsAt: tstz('trial_ends_at'),
+  currentPeriodEnd: tstz('current_period_end'),
+  notes: text('notes').notNull().default(''),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const subscriptionEvents = platform.table('subscription_events', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  occurredAt: tstz('occurred_at').notNull().defaultNow(),
+  organizationId: uuid('organization_id').notNull(),
+  actor: text('actor').notNull(),
+  event: text('event').notNull(),
+  fromPlan: text('from_plan'),
+  toPlan: text('to_plan'),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status'),
+  details: jsonb('details').notNull().default({}),
+});
+
+export const operators = platform.table('operators', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  displayName: text('display_name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  status: text('status').notNull().default('ACTIVE'),
+  failedAttempts: integer('failed_attempts').notNull().default(0),
+  lockedUntil: tstz('locked_until'),
+  lastLoginAt: tstz('last_login_at'),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const operatorSessions = platform.table('operator_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  operatorId: uuid('operator_id').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  expiresAt: tstz('expires_at').notNull(),
+  revokedAt: tstz('revoked_at'),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+});
+
 // ── auth ───────────────────────────────────────────────────────────────────────
 export const users = auth.table('users', {
   id: uuid('id').primaryKey().defaultRandom(),

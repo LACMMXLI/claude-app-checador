@@ -16,6 +16,8 @@ import {
   users,
   permissions,
   policyOverrides,
+  plans,
+  subscriptions,
 } from '../../db/schema/index.js';
 import { hashPassword } from '../auth/password.js';
 import { type PolicyLayer, validateOverride } from '../policies/policy.js';
@@ -41,6 +43,21 @@ export const ENCARGADO_PERMISSIONS = [
 
 const timezoneSchema = z.string().refine(isValidTimezone, 'zona horaria IANA inválida');
 
+/**
+ * Suscripción inicial (D-84). Sin ella, el trigger de BD deja al negocio en ADVANCED/ACTIVE (D-89): así aplican el CLI y las
+ * pruebas. La consola de plataforma siempre la indica.
+ */
+export const initialSubscriptionSchema = z
+  .object({
+    planCode: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
+    status: z.enum(['TRIAL', 'ACTIVE']),
+    trialEndsAt: z.coerce.date().optional(),
+    currentPeriodEnd: z.coerce.date().nullable().optional(),
+    notes: z.string().max(2000).optional(),
+  })
+  .refine((v) => v.status !== 'TRIAL' || v.trialEndsAt !== undefined, { message: 'trialEndsAt', path: ['trialEndsAt'] });
+export type InitialSubscription = z.input<typeof initialSubscriptionSchema>;
+
 export const createOrganizationSchema = z.object({
   name: z.string().trim().min(1),
   slug: z.string().regex(/^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/),
@@ -53,8 +70,10 @@ export const createOrganizationSchema = z.object({
     /** Solo para identidades nuevas; si el correo ya existe se reutiliza la identidad global (sin tocar su contraseña). */
     password: z.string().min(10).optional(),
   }),
+  subscription: initialSubscriptionSchema.optional(),
 });
 export type CreateOrganizationInput = z.input<typeof createOrganizationSchema>;
+
 
 export interface ProvisionedOrganization {
   organizationId: string;
@@ -84,6 +103,23 @@ export class PlatformAdminService {
         .values({ slug: input.slug, name: input.name, timezone: input.timezone })
         .returning();
       const organizationId = org!.id;
+
+      // D-84: el trigger de BD dejó ADVANCED/ACTIVE; si se indicó otra suscripción, se aplica en la misma transacción
+      if (input.subscription) {
+        const [plan] = await tx.select().from(plans).where(eq(plans.code, input.subscription.planCode));
+        if (!plan) throw new DomainError('PLAN_NOT_FOUND');
+        if (!plan.isActive) throw new DomainError('PLAN_NOT_ACTIVE');
+        await tx
+          .update(subscriptions)
+          .set({
+            planCode: input.subscription.planCode,
+            status: input.subscription.status,
+            trialEndsAt: input.subscription.status === 'TRIAL' ? input.subscription.trialEndsAt! : null,
+            currentPeriodEnd: input.subscription.status === 'ACTIVE' ? (input.subscription.currentPeriodEnd ?? null) : null,
+            notes: input.subscription.notes ?? '',
+          })
+          .where(eq(subscriptions.organizationId, organizationId));
+      }
 
       const branchIds: Record<string, string> = {};
       for (const b of input.branches) {
@@ -140,13 +176,20 @@ export class PlatformAdminService {
         encargadoRoleId: encargadoRole!.id,
         createdUser,
       };
-    });
+    }, { actor });
   }
 
   async setOrganizationStatus(slug: string, status: 'ACTIVE' | 'SUSPENDED', actor = 'platform-cli'): Promise<void> {
     await this.platformDb.run(async (tx) => {
-      const [org] = await tx.update(organizations).set({ status }).where(eq(organizations.slug, slug)).returning();
+      const [org] = await tx.select().from(organizations).where(eq(organizations.slug, slug));
       if (!org) throw new DomainError('ORGANIZATION_NOT_FOUND');
+      // D-84: el estado del negocio lo dicta su suscripción (un trigger lo sincroniza); aquí solo se mueve la suscripción
+      const moved = await tx
+        .update(subscriptions)
+        .set({ status: status === 'ACTIVE' ? 'ACTIVE' : 'SUSPENDED' })
+        .where(eq(subscriptions.organizationId, org.id))
+        .returning();
+      if (moved.length === 0) await tx.update(organizations).set({ status }).where(eq(organizations.id, org.id));
       await tx.insert(auditLog).values({
         organizationId: org.id,
         actorType: 'SYSTEM',
@@ -157,7 +200,7 @@ export class PlatformAdminService {
         reason: `Cambio por ${actor}`,
       });
       await tx.insert(platformAuditLog).values({ actor, action: 'organization.status_changed', organizationId: org.id, details: { status } });
-    });
+    }, { actor });
   }
 
   /**
