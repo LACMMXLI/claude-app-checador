@@ -4,13 +4,17 @@
   "version": "0.1.0",
   "description": "Sistema de empleados — módulo Reloj Checador (plataforma multi-negocio)",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @checador/api test",
+    "test": "pnpm -r --workspace-concurrency=1 test",
     "db:bootstrap": "pnpm --filter @checador/api db:bootstrap",
     "db:migrate": "pnpm --filter @checador/api db:migrate",
-    "check:tenancy": "pnpm --filter @checador/api check:tenancy"
+    "check:tenancy": "pnpm --filter @checador/api check:tenancy",
+    "test:api": "pnpm --filter @checador/api test",
+    "test:platform": "pnpm --filter @checador/platform-api test"
   }
 }

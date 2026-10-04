@@ -1,28 +1,23 @@
 {
-  "name": "@checador/api",
+  "name": "@checador/platform-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "API de la consola de plataforma (planes, clientes y suscripciones). Plano separado del de los clientes (D-81).",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/src/main.js",
     "dev": "tsx watch src/main.ts",
     "test": "vitest run",
-    "db:bootstrap": "tsx src/cli/bootstrap.ts",
-    "db:migrate": "tsx src/cli/migrate.ts",
-    "check:tenancy": "tsx src/cli/check-tenancy.ts",
-    "platform": "tsx src/cli/platform.ts",
-    "reconcile": "tsx src/cli/reconcile.ts",
-    "start:prod:init": "node dist/src/cli/bootstrap.js && node dist/src/cli/migrate.js"
+    "admin": "tsx src/cli/platform-admin.ts"
   },
   "dependencies": {
+    "@checador/api": "workspace:*",
     "@nestjs/common": "^11.2.7",
     "@nestjs/core": "^11.2.7",
     "@nestjs/platform-express": "^11.2.7",
-    "@node-rs/argon2": "^2.2.1",
     "drizzle-orm": "^0.45.3",
-    "exceljs": "4.4.0",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
@@ -35,11 +30,5 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"
-  },
-  "exports": {
-    "./platform": {
-      "types": "./dist/src/platform-entry.d.ts",
-      "default": "./dist/src/platform-entry.js"
-    }
   }
 }

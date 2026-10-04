@@ -26,8 +26,13 @@ describe('reglas de arquitectura (impuestas en CI)', () => {
 
   it('PlatformDb (BYPASSRLS) solo se usa en el CLI de plataforma y en su servicio; la raíz de composición de la API no lo conoce', () => {
     const users = all.filter((f) => /PlatformDb/.test(read(f))).map(rel).sort();
-    expect(users).toEqual(['cli/platform.ts', 'common/tenancy/platform-db.ts', 'modules/organizations/provisioning.service.ts']);
+    expect(users).toEqual(['cli/platform.ts', 'common/tenancy/platform-db.ts', 'modules/organizations/provisioning.service.ts', 'platform-entry.ts']);
     expect(read(path.join(src, 'container.ts'))).not.toMatch(/PlatformDb|platform_ops|PLATFORM_DATABASE_URL/);
+  });
+
+  it('la API de clientes nunca importa el punto de entrada de la plataforma (D-81): solo lo usa apps/platform-api', () => {
+    const offenders = all.filter((f) => rel(f) !== 'platform-entry.ts' && runtimeImports(f).some((i) => /platform-entry(\.js)?$/.test(i)));
+    expect(offenders.map(rel)).toEqual([]);
   });
 
   it('solo `db/pool.ts` crea pools (new Pool) y solo `common/tenancy` y `db` tocan conexiones', () => {
