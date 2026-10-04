@@ -2,7 +2,9 @@
 
 import { type FormEvent, useEffect, useState } from 'react';
 import { Card, Disclosure, Empty, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
+import { Icon } from '@/components/icons';
 import { api, type Branch, type Employee } from '@/lib/api';
+import { useSubscription } from '@/lib/plan';
 import { t } from '@/lib/i18n';
 
 interface Entry { employeeId: string; weekday: number; startTime: string; endTime: string }
@@ -14,6 +16,7 @@ export default function TemplatesPage() {
   const branches = useLoad(() => api<Branch[]>('/branches'));
   const employees = useLoad(() => api<Employee[]>('/employees?status=ACTIVE'));
   const list = useLoad(() => api<Template[]>('/schedule-templates'));
+  const plan = useSubscription();
   const action = useAction();
   const [form, setForm] = useState({ branchId: '', name: '' });
   const [current, setCurrent] = useState<Template | null>(null);
@@ -43,6 +46,22 @@ export default function TemplatesPage() {
     if (r) setMessage(`${t('schedule.created')}: ${r.created.length} · ${t('schedule.conflicts')}: ${r.conflicts.length}`);
   }
   const staff = employees.data ?? [];
+
+  // D-83: la función depende del plan; la API la rechaza igualmente (FEATURE_NOT_IN_PLAN)
+  if (plan && !plan.features.scheduleTemplates) {
+    return (
+      <>
+        <h1>{t('nav.templates')}</h1>
+        <Card>
+          <div className="empty" data-testid="feature-locked">
+            <span className="empty-icon"><Icon name="lock" size={28} /></span>
+            <strong>{t('plan.upgradeTitle')}</strong>
+            <p>{t('plan.upgradeText')}</p>
+          </div>
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>

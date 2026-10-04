@@ -50,6 +50,7 @@ export class ReportsController {
   async export(@Req() req: Request, @Body() body: unknown, @Res() res: Response) {
     const { ctx, access } = await this.auth.tenant(req);
     const input = parse(exportSchema, body);
+    await this.c.entitlements.assertFeature(ctx, 'reportsExport'); // D-83: función del plan Avanzado
     const file = await this.c.reports.export(ctx, access, input.filters, input.format);
     res.setHeader('content-type', file.contentType);
     res.setHeader('content-disposition', `attachment; filename="${file.filename}"`);

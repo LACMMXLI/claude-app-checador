@@ -4,6 +4,7 @@ import { Gate } from './common/tenancy/gate.js';
 import { TenantDb } from './common/tenancy/tenant-db.js';
 import { AuditQueryService } from './modules/audit/audit-query.service.js';
 import { AuditService } from './modules/audit/audit.service.js';
+import { EntitlementsService } from './modules/subscription/entitlements.service.js';
 import { ReportsService } from './modules/reports/reports.service.js';
 import { AuthService } from './modules/auth/auth.service.js';
 import { InvitationsService } from './modules/auth/invitations.service.js';
@@ -40,6 +41,7 @@ export function createContainer(options: ContainerOptions) {
   const tenantDb = new TenantDb(options.appPool);
   const gate = new Gate(options.appPool);
   const audit = new AuditService();
+  const entitlements = new EntitlementsService(tenantDb);
   const policies = new PoliciesService(tenantDb, audit, options.clock);
   const employees = new EmployeesService(tenantDb, audit, {
     pepper: options.pinPepper,
@@ -63,7 +65,8 @@ export function createContainer(options: ContainerOptions) {
     rbac: new RbacService(tenantDb),
     auth,
     sessions: new SessionsService(gate, auth),
-    invitations: new InvitationsService(tenantDb, gate, audit),
+    entitlements,
+    invitations: new InvitationsService(tenantDb, gate, audit, undefined, entitlements),
     auditQuery: new AuditQueryService(tenantDb),
     scheduling,
     templates: new TemplatesService(tenantDb, audit, scheduling),

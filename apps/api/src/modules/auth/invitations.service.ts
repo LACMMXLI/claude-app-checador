@@ -7,6 +7,7 @@ import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { TenantDb } from '../../common/tenancy/tenant-db.js';
 import { branches, invitations, organizationMemberships, roles, users } from '../../db/schema/index.js';
 import type { AuditService } from '../audit/audit.service.js';
+import type { EntitlementsService } from '../subscription/entitlements.service.js';
 import { hashPassword, verifyPassword } from './password.js';
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
@@ -33,6 +34,8 @@ export class InvitationsService {
     private readonly gate: Gate,
     private readonly audit: AuditService,
     private readonly ttlHours = INVITATION_TTL_HOURS,
+    /** D-86: cupo de usuarios del plan (opcional: las pruebas unitarias pueden omitirlo). */
+    private readonly entitlements?: EntitlementsService,
   ) {}
 
   /** Devuelve el token UNA sola vez (para que el admin lo entregue). Nunca se registra ni se guarda en claro. */
@@ -53,6 +56,8 @@ export class InvitationsService {
         .innerJoin(users, eq(users.id, organizationMemberships.userId))
         .where(eq(users.email, input.email));
       if (existing.some((m) => m.status === 'ACTIVE')) throw new DomainError('ALREADY_MEMBER');
+      // cupo de usuarios del plan: activos + invitaciones pendientes (la nueva invitación reemplaza a otra del mismo correo)
+      await this.entitlements?.assertCanInvite(tx);
       // una sola invitación pendiente por correo: la nueva reemplaza a la anterior
       await tx
         .update(invitations)

@@ -7,7 +7,8 @@ import { platformPool } from './_env.js';
 const USAGE = `Uso:
   platform create-organization --name "Fatboy" --slug fatboy --timezone America/Tijuana \\
       --branch VEN="Venecia" --branch SMA="San Marcos" --branch AME="Américas" \\
-      --admin-email dueno@ejemplo.com --admin-name "Nombre" --admin-password '<mínimo 10 caracteres>'
+      --admin-email dueno@ejemplo.com --admin-name "Nombre" --admin-password '<mínimo 10 caracteres>' \\
+      [--plan BASIC|ADVANCED] [--trial-days 14]       (sin --plan: ADVANCED activo, sin vencimiento)
   platform set-status --slug fatboy --status SUSPENDED|ACTIVE
   platform reset-password --email persona@ejemplo.com --password '<nueva>'
   platform set-policy --slug fatboy --param breakRequiredAfterMin=360 --param exitToleranceMin=5
@@ -25,6 +26,8 @@ const { values } = parseArgs({
     'admin-email': { type: 'string' },
     'admin-name': { type: 'string' },
     'admin-password': { type: 'string' },
+    plan: { type: 'string' },
+    'trial-days': { type: 'string' },
     status: { type: 'string' },
     email: { type: 'string' },
     password: { type: 'string' },
@@ -45,6 +48,11 @@ try {
         return { code: code ?? '', name: name.join('=') };
       }),
       admin: { email: values['admin-email'] ?? '', displayName: values['admin-name'] ?? '', password: values['admin-password'] },
+      subscription: values.plan
+        ? values['trial-days']
+          ? { planCode: values.plan, status: 'TRIAL', trialEndsAt: new Date(Date.now() + Number(values['trial-days']) * 86_400_000) }
+          : { planCode: values.plan, status: 'ACTIVE' }
+        : undefined,
     });
     console.log(JSON.stringify(result, null, 2));
   } else if (command === 'set-status') {

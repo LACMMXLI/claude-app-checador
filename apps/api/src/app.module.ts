@@ -15,6 +15,7 @@ import { KioskDeviceController } from './http/controllers/kiosk-device.controlle
 import { KiosksController } from './http/controllers/kiosks.controller.js';
 import { MembersController } from './http/controllers/members.controller.js';
 import { PoliciesController } from './http/controllers/policies.controller.js';
+import { SubscriptionController } from './http/controllers/subscription.controller.js';
 import { SchedulesController } from './http/controllers/schedules.controller.js';
 import { ErrorsFilter } from './http/errors.filter.js';
 import { HEALTH_CHECK, HealthController } from './http/health.controller.js';
@@ -55,7 +56,8 @@ export class AppModule {
         SchedulesController,
         AttendanceController,
         RealtimeController,
-    ReportsController,
+        ReportsController,
+        SubscriptionController,
       ],
       providers: [
         { provide: PG_POOL, useValue: options.pool },

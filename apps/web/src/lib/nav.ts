@@ -35,6 +35,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: '/sucursales', label: 'nav.branches', permission: null },
       { href: '/politicas', label: 'nav.policies', permission: 'settings.manage' },
       { href: '/auditoria', label: 'nav.audit', permission: 'audit.view' },
+      { href: '/plan', label: 'nav.plan', permission: null },
       { href: '/cuenta', label: 'nav.account', permission: null },
     ],
   },

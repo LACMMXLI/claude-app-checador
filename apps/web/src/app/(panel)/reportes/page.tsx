@@ -6,6 +6,7 @@ import { Icon } from '@/components/icons';
 import { Card, Empty, ErrorBox, Field, Help, Loading, useAction } from '@/components/ui';
 import { api, download, type Employee, type PeriodKey, type ReportKind, type ReportTable } from '@/lib/api';
 import { t } from '@/lib/i18n';
+import { useSubscription } from '@/lib/plan';
 import { useSession } from '@/lib/session';
 
 const KINDS: ReportKind[] = ['summary', 'sessions', 'incidents', 'corrections'];
@@ -19,6 +20,7 @@ const PAGE = 200; // filas en pantalla; la exportación lleva todas (hasta 100,0
  */
 export default function ReportsPage() {
   const { can } = useSession();
+  const plan = useSubscription();
   const { branches } = useBranches();
   const [filters, setFilters] = useState<{ report: ReportKind; period: PeriodKey | 'custom'; from: string; to: string; branchId: string; employeeId: string }>({
     report: 'summary',
@@ -109,7 +111,8 @@ export default function ReportsPage() {
             </Field>
           )}
           <button className="primary" disabled={query.busy} onClick={() => void run()} data-testid="report-run">{t('reports.run')}</button>
-          {can('reports.export') && (
+          {can('reports.export') && plan && !plan.features.reportsExport && <span className="plan-lock" data-testid="export-locked"><Icon name="lock" size={14} /> {t('plan.feature.reportsExport')}: {t('plan.notIncluded')}</span>}
+          {can('reports.export') && (plan === null || plan.features.reportsExport) && (
             <>
               <button className="secondary" disabled={exporting.busy} onClick={() => void exportAs('xlsx')} data-testid="export-xlsx">{t('reports.export')} XLSX</button>
               <button className="secondary" disabled={exporting.busy} onClick={() => void exportAs('csv')} data-testid="export-csv">{t('reports.export')} CSV</button>

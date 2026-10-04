@@ -396,6 +396,22 @@ table.week .who-cell { position: sticky; left: 0; background: var(--surface); fo
 
 @media (max-width: 420px) { .keypad { gap: .55rem; } .keypad button { min-height: 72px; font-size: 1.8rem; } .keypad button.primary, .keypad .key-secondary, .keypad button.key-clear { font-size: .95rem; padding-inline: .25rem; } .kiosk-panel { padding: 1.2rem; } }
 
+/* ── Plan del negocio ── */
+.plan-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 1rem 1.25rem; margin-bottom: 1rem; background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--primary); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.plan-name { font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; }
+.badge.plan-TRIAL { background: var(--warn-soft); color: var(--warn); } .badge.plan-ACTIVE { background: var(--ok-soft); color: var(--ok); }
+.badge.plan-SUSPENDED, .badge.plan-EXPIRED, .badge.plan-CANCELLED { background: var(--danger-soft); color: var(--danger); }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; align-items: start; }
+.usage, .features { list-style: none; padding: 0; margin: 0 0 .8rem; display: grid; gap: .9rem; }
+.usage-row { display: flex; justify-content: space-between; gap: .6rem; margin-bottom: .3rem; font-size: .92rem; }
+.usage-row span { display: inline-flex; align-items: center; gap: .4rem; }
+.bar { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--primary); border-radius: 999px; transition: width .4s var(--ease); }
+.bar span.near { background: var(--warn); } .bar span.full { background: var(--danger-solid); }
+.features li { display: grid; grid-template-columns: auto 1fr auto; gap: .6rem; align-items: center; }
+.features li.on .icon { color: var(--ok); } .features li.off .icon { color: var(--muted); }
+.plan-lock { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; color: var(--muted); }
+
 /* ── Móvil ── */
 @media (max-width: 900px) { .split, .account, .home-grid { grid-template-columns: 1fr; } .auth { grid-template-columns: 1fr; } .auth-hero { display: none; } }
 @media (max-width: 860px) {

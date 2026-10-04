@@ -137,6 +137,7 @@ export class SchedulesController {
   @Get('schedule-templates')
   async listTemplates(@Req() req: Request, @Query('branchId') branchId?: string) {
     const { ctx, access } = await this.auth.tenant(req);
+    await this.c.entitlements.assertFeature(ctx, 'scheduleTemplates'); // D-83: función del plan Avanzado
     if (branchId !== undefined && !z.string().uuid().safeParse(branchId).success) throw new DomainError('VALIDATION_ERROR');
     return this.c.templates.list(ctx, access, branchId);
   }
@@ -144,18 +145,21 @@ export class SchedulesController {
   @Post('schedule-templates')
   async createTemplate(@Req() req: Request, @Body() body: unknown) {
     const { ctx, access } = await this.auth.tenant(req);
+    await this.c.entitlements.assertFeature(ctx, 'scheduleTemplates'); // D-83: función del plan Avanzado
     return this.c.templates.create(ctx, access, parse(templateCreate, body));
   }
 
   @Get('schedule-templates/:id')
   async getTemplate(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
     const { ctx, access } = await this.auth.tenant(req);
+    await this.c.entitlements.assertFeature(ctx, 'scheduleTemplates'); // D-83: función del plan Avanzado
     return this.c.templates.get(ctx, access, id);
   }
 
   @Put('schedule-templates/:id')
   async putTemplate(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
     const { ctx, access } = await this.auth.tenant(req);
+    await this.c.entitlements.assertFeature(ctx, 'scheduleTemplates'); // D-83: función del plan Avanzado
     const input = parse(templatePut, body);
     return this.c.templates.replaceEntries(ctx, access, id, input.expectedVersion, input.entries, { name: input.name, isActive: input.isActive });
   }
@@ -164,6 +168,7 @@ export class SchedulesController {
   @HttpCode(200)
   async applyTemplate(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
     const { ctx, access } = await this.auth.tenant(req);
+    await this.c.entitlements.assertFeature(ctx, 'scheduleTemplates'); // D-83: función del plan Avanzado
     return this.c.templates.apply(ctx, access, id, parse(applySchema, body));
   }
 }

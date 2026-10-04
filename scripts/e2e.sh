@@ -23,6 +23,9 @@ node dist/src/cli/check-tenancy.js
 node dist/src/cli/platform.js create-organization --name Fatboy --slug fatboy --timezone America/Tijuana \
   --branch VEN=Venecia --branch SMA="San Marcos" --branch AME=Américas \
   --admin-email dueno@fatboy.example --admin-name "Dueño Fatboy" --admin-password 'contraseña-larga-123' >/dev/null
+# Fase 5: un segundo negocio en plan BÁSICO (para probar límites y funciones del plan en el panel de clientes)
+node dist/src/cli/platform.js create-organization --name "Café Básico" --slug basico --timezone America/Tijuana \
+  --branch UNO="Única" --admin-email basico@cafe.example --admin-name "Dueño Básico" --admin-password 'contraseña-larga-123' --plan BASIC >/dev/null
 # Fase 4: valores de Fatboy por CLI de plataforma (RN-ORG-09: ningún negocio queda fijo en el código ni en migraciones)
 node dist/src/cli/platform.js set-policy --slug fatboy --param breakRequiredAfterMin=360 --param exitToleranceMin=5 >/dev/null
 
