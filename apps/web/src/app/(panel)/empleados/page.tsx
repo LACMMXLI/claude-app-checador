@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { type FormEvent, useState } from 'react';
-import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
+import { Card, Disclosure, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -33,7 +33,7 @@ export default function EmployeesPage() {
       <ErrorBox message={error ?? action.error} />
       {secret && <OneTimeSecret label={t('employees.pinCreated')} value={secret} onClose={() => setSecret(null)} />}
       {can('employees.manage') && (
-        <Card title={t('employees.new')}>
+        <Disclosure title={t('employees.new')}>
           <form className="row" onSubmit={create}>
             <Field label={t('employees.number')}><input required value={form.employeeNumber} onChange={(e) => setForm({ ...form, employeeNumber: e.target.value })} /></Field>
             <Field label={t('employees.firstName')}><input required value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
@@ -47,7 +47,7 @@ export default function EmployeesPage() {
             </Field>
             <button className="primary" disabled={action.busy}>{t('common.create')}</button>
           </form>
-        </Card>
+        </Disclosure>
       )}
       <Card actions={
         <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label={t('common.status')}>

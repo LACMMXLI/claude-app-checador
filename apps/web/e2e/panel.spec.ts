@@ -12,22 +12,33 @@ test('panel: login → sucursal → empleado (PIN una vez) → kiosco (token una
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page.getByRole('heading', { name: 'Inicio' })).toBeVisible();
   await expect(page.locator('.sidebar .org')).toHaveText('Fatboy');
+  if (process.env.E2E_SCREENSHOTS) {
+    await expect(page.getByTestId('kpis')).toBeVisible();
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/inicio.png`, fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/inicio-movil.png`, fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
 
   // la sesión NO está en localStorage: solo en una cookie HttpOnly
   expect(await page.evaluate(() => Object.keys(localStorage).length)).toBe(0);
   expect(await page.evaluate(() => document.cookie)).toBe('');
 
   // Sucursal
-  await page.getByRole('link', { name: 'Sucursales' }).click();
+  await page.getByRole('link', { name: 'Configuración' }).click();
   await expect(page.getByRole('heading', { name: 'Sucursales' })).toBeVisible(); // esperar la navegación antes de capturar
+  await page.getByText('Nueva sucursal', { exact: true }).click(); // el alta está plegada
   await page.getByLabel('Código').fill(`E${stamp}`);
   await page.getByLabel('Nombre', { exact: true }).fill(`Sucursal ${stamp}`);
   await page.getByRole('button', { name: 'Crear' }).click();
   await expect(page.getByRole('cell', { name: `Sucursal ${stamp}` })).toBeVisible();
 
   // Empleado: el PIN aparece una sola vez
-  await page.getByRole('link', { name: 'Empleados' }).click();
+  await page.getByRole('link', { name: 'Equipo' }).click();
   await expect(page.getByRole('heading', { name: 'Empleados' })).toBeVisible(); // esperar la navegación antes de capturar
+  await page.getByText('Nuevo empleado', { exact: true }).click();
   await page.getByLabel('Número').fill(`N${stamp}`);
   await page.getByLabel('Nombre(s)').fill('Ana');
   await page.getByLabel('Apellidos').fill('E2E');
@@ -40,8 +51,9 @@ test('panel: login → sucursal → empleado (PIN una vez) → kiosco (token una
   await expect(page.getByRole('link', { name: 'Ana E2E' })).toBeVisible();
 
   // Kiosco: token una sola vez
-  await page.getByRole('link', { name: 'Kioscos' }).click();
+  await page.getByRole('link', { name: 'Kioscos' }).click(); // pestaña de Equipo
   await expect(page.getByRole('heading', { name: 'Kioscos' })).toBeVisible(); // esperar la navegación antes de capturar
+  await page.getByText('Nuevo kiosco', { exact: true }).click();
   await page.getByLabel('Nombre', { exact: true }).fill(`Tablet ${stamp}`);
   await page.getByLabel('Sucursal', { exact: true }).first().selectOption({ label: 'Venecia' });
   await page.getByRole('button', { name: 'Crear' }).click();
@@ -49,6 +61,7 @@ test('panel: login → sucursal → empleado (PIN una vez) → kiosco (token una
   await page.getByRole('button', { name: 'Ya lo guardé' }).click();
 
   // Políticas: valor efectivo + origen
+  await page.getByRole('link', { name: 'Configuración' }).click();
   await page.getByRole('link', { name: 'Políticas' }).click();
   await expect(page.getByRole('heading', { name: 'Políticas' })).toBeVisible(); // esperar la navegación antes de capturar
   const row = page.getByRole('row', { name: /Minutos permitidos por pausa/ });
@@ -56,8 +69,10 @@ test('panel: login → sucursal → empleado (PIN una vez) → kiosco (token una
   await expect(row).toContainText('plataforma');
 
   // Invitación a un encargado de Venecia
+  await page.getByRole('link', { name: 'Equipo' }).click();
   await page.getByRole('link', { name: 'Usuarios' }).click();
   await expect(page.getByRole('heading', { name: 'Usuarios del negocio' })).toBeVisible(); // esperar la navegación antes de capturar
+  await page.getByText('Invitar usuario', { exact: true }).first().click();
   const managerEmail = `encargado${stamp}@ejemplo.com`;
   await page.getByLabel('Correo').fill(managerEmail);
   await page.getByLabel('Rol').selectOption({ label: 'ENCARGADO' });
@@ -80,7 +95,7 @@ test('panel: login → sucursal → empleado (PIN una vez) → kiosco (token una
   await expect(guest.getByRole('heading', { name: 'Inicio' })).toBeVisible();
   await expect(guest.getByRole('link', { name: 'Usuarios' })).toHaveCount(0);
   await expect(guest.getByRole('link', { name: 'Kioscos' })).toHaveCount(0);
-  await guest.getByRole('link', { name: 'Sucursales' }).click();
+  await guest.getByRole('link', { name: 'Configuración' }).click();
   await expect(guest.getByRole('heading', { name: 'Sucursales' })).toBeVisible();
   await expect(guest.getByRole('cell', { name: 'Venecia' })).toBeVisible();
   await expect(guest.getByRole('cell', { name: 'San Marcos' })).toHaveCount(0);

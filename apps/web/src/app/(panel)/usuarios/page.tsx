@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useState } from 'react';
-import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, useAction, useLoad } from '@/components/ui';
+import { Card, Disclosure, Empty, ErrorBox, Field, Loading, OneTimeSecret, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee } from '@/lib/api';
 import { t } from '@/lib/i18n';
 
@@ -52,7 +52,7 @@ export default function UsersPage() {
       <h1>{t('users.title')}</h1>
       <ErrorBox message={members.error ?? action.error} />
       {link && <OneTimeSecret label={t('users.invitationLink')} value={link} onClose={() => setLink(null)} />}
-      <Card title={t('users.invite')}>
+      <Disclosure title={t('users.invite')}>
         <form className="row" onSubmit={invite}>
           <Field label={t('login.email')}><input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
           <Field label={t('users.role')}>
@@ -76,8 +76,8 @@ export default function UsersPage() {
           )}
           <button className="primary" disabled={action.busy}>{t('users.invite')}</button>
         </form>
-      </Card>
-      <Card>
+      </Disclosure>
+      <Card title={t('users.members')} icon="shield">
         {!members.data ? <Loading /> : (
           <table>
             <thead><tr><th>{t('common.name')}</th><th>{t('users.role')}</th><th>{t('users.linkEmployee')}</th><th>{t('common.status')}</th><th>{t('common.actions')}</th></tr></thead>

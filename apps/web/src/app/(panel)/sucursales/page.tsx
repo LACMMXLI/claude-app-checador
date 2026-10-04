@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useState } from 'react';
-import { Card, Empty, ErrorBox, Field, Loading, Status, useAction, useLoad } from '@/components/ui';
+import { Card, Disclosure, Empty, ErrorBox, Field, Loading, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -34,7 +34,7 @@ export default function BranchesPage() {
       <h1>{t('branches.title')}</h1>
       <ErrorBox message={error ?? action.error} />
       {manage && (
-        <Card title={editing ? `${t('common.edit')}: ${editing.code}` : t('branches.new')}>
+        <Disclosure key={editing?.id ?? 'new'} defaultOpen={Boolean(editing)} title={editing ? `${t('common.edit')}: ${editing.code}` : t('branches.new')} icon={editing ? 'sliders' : 'plus'}>
           {editing ? (
             <form className="row" onSubmit={save}>
               <Field label={t('common.name')}><input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
@@ -50,7 +50,7 @@ export default function BranchesPage() {
               <button className="primary" disabled={action.busy}>{t('common.create')}</button>
             </form>
           )}
-        </Card>
+        </Disclosure>
       )}
       <Card>
         {!data ? <Loading /> : data.length === 0 ? <Empty /> : (

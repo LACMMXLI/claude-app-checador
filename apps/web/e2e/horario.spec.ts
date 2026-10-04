@@ -32,7 +32,8 @@ test('Fase 2: horario semanal — crear, nocturno, conflicto, copiar semana, pub
     expect(r.status()).toBe(201);
   }
 
-  await page.getByRole('link', { name: 'Horario semanal' }).click();
+  await page.getByRole('link', { name: 'Operación' }).click();
+  await page.getByRole('link', { name: 'Horario', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Horario semanal' })).toBeVisible();
   await page.getByLabel('Sucursal').selectOption({ label: 'Venecia' });
   await page.getByRole('button', { name: 'Semana siguiente →' }).click();
@@ -82,9 +83,16 @@ test('Fase 2: horario semanal — crear, nocturno, conflicto, copiar semana, pub
   await page.getByRole('dialog', { name: 'Turno' }).getByLabel(/Motivo/).fill('Evento privado');
   await page.getByRole('button', { name: 'Cancelar turno' }).click();
   await expect(page.locator('.shift.cancelled')).toHaveText('7a–4p');
+  if (process.env.E2E_SCREENSHOTS) {
+    await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/horario.png`, fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/horario-movil.png`, fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
 
   // Próximos turnos del empleado
-  await page.getByRole('link', { name: 'Empleados' }).click();
+  await page.getByRole('link', { name: 'Equipo' }).click();
   await page.getByRole('link', { name: `Carlos ${stamp}` }).click();
   await expect(page.getByRole('heading', { name: 'Próximos turnos' })).toBeVisible();
   await expect(page.getByRole('cell', { name: '7p–3a (+1)' })).toHaveCount(2);

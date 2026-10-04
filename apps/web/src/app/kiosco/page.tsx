@@ -362,7 +362,7 @@ export default function KioskPage() {
         </div>
         <div className="kiosk-clock">
           <div className="kiosk-time" aria-live="off">{clock}</div>
-          <div className="muted">{today}</div>
+          <div className="kiosk-date">{today}</div>
         </div>
         <button className="link" onClick={() => void document.documentElement.requestFullscreen?.()}>{t('kiosk.fullscreen')}</button>
       </header>
@@ -371,15 +371,19 @@ export default function KioskPage() {
       {mode === 'pin' && (
         <div className="kiosk-panel">
           <h1>{t('kiosk.pin.prompt')}</h1>
+          <p className="kiosk-hint">{t('kiosk.pin.hint')}</p>
           <div className="pin-dots" aria-label={t('kiosk.pin.prompt')} data-testid="pin-dots">
             {Array.from({ length: PIN_LENGTH }, (_, i) => <span key={i} className={i < pin.length ? 'filled' : ''} />)}
           </div>
           {message && <p className="error kiosk-message" role="alert">{message}</p>}
+          <p className={`kiosk-status ${busy ? '' : pin.length === PIN_LENGTH ? 'ok' : ''}`} role="status" data-testid="pin-status">
+            {busy ? t('kiosk.pin.checking') : pin.length === PIN_LENGTH ? t('kiosk.pin.ready') : `${t('kiosk.pin.missing')} ${PIN_LENGTH - pin.length}`}
+          </p>
           <div className="keypad">
             {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
               <button key={d} onClick={() => press(d)} disabled={busy}>{d}</button>
             ))}
-            <button className="key-secondary" onClick={() => setPin((p) => p.slice(0, -1))} disabled={busy}>{t('kiosk.pin.delete')}</button>
+            <button className="key-secondary key-clear" onClick={() => setPin((p) => p.slice(0, -1))} disabled={busy}>{t('kiosk.pin.delete')}</button>
             <button onClick={() => press('0')} disabled={busy}>0</button>
             <button className="primary" onClick={() => void identify()} disabled={busy || pin.length !== PIN_LENGTH}>{t('kiosk.pin.confirm')}</button>
           </div>
@@ -424,7 +428,7 @@ export default function KioskPage() {
 
       {mode === 'done' && done && (
         <div className="kiosk-panel kiosk-done" role="status" data-testid="kiosk-done">
-          <div className="kiosk-check">✓</div>
+          <div className="kiosk-check" aria-hidden="true" />
           <h1>{t(`kiosk.done.${done.action}`)}</h1>
           <p className="kiosk-info">{done.name} · {timeIn(done.occurredAt, tz)}</p>
           {done.breakExcess ? <p className="kiosk-info">{t('kiosk.done.breakExcess')} {done.breakExcess} min</p> : null}

@@ -38,6 +38,7 @@ test('(60) Mi cuenta: cambiar la propia contraseña, aviso de éxito y cierre de
   const mine = await login(await browser.newContext(), oldPassword);
   await expect(mine.getByRole('heading', { name: 'Inicio' })).toBeVisible();
 
+  await mine.getByRole('link', { name: 'Configuración' }).click();
   await mine.getByRole('link', { name: 'Mi cuenta' }).click();
   await expect(mine.getByRole('heading', { name: 'Mi cuenta' })).toBeVisible();
   await expect(mine.locator('.profile').getByText(email)).toBeVisible();

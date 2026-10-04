@@ -33,7 +33,7 @@ export default function SessionsPage() {
   return (
     <>
       <h1>{t('nav.sessions')}</h1>
-      <div className="row" style={{ marginBottom: '1rem' }}>
+      <div className="filters">
         <Field label={t('common.branch')}>
           <select value={filter.branchId} onChange={(e) => setFilter({ ...filter, branchId: e.target.value })}>
             <option value="">{t('live.all')}</option>
@@ -48,7 +48,7 @@ export default function SessionsPage() {
             {['OPEN', 'REVIEW', 'CLOSED'].map((s) => <option key={s} value={s}>{t(`att.session.status.${s}`)}</option>)}
           </select>
         </Field>
-        <label className="row" style={{ alignItems: 'center' }}>
+        <label className="check">
           <input type="checkbox" checked={filter.onlyWithIncidents} onChange={(e) => setFilter({ ...filter, onlyWithIncidents: e.target.checked })} />
           {t('att.onlyIncidents')}
         </label>

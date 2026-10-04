@@ -59,7 +59,7 @@ export default function MySessionsPage() {
   return (
     <>
       <h1>{t('nav.mySessions')}</h1>
-      <div className="row" style={{ marginBottom: '1rem' }}>
+      <div className="filters">
         <Field label={t('common.branch')}>
           <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             {branches?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}

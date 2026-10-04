@@ -79,18 +79,20 @@ export default function SchedulePage() {
     <>
       <h1>{t('schedule.title')}</h1>
       <ErrorBox message={branches.error ?? loadError ?? action.error} />
-      <Card>
+      <div className="filters">
         <div className="row">
           <Field label={t('common.branch')}>
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
               {branchList?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </Field>
-          <button onClick={() => setDate(addDays(week?.weekStart ?? date, -7))}>{t('schedule.prev')}</button>
-          <button onClick={() => setDate(todayLocal())}>{t('schedule.today')}</button>
-          <button onClick={() => setDate(addDays(week?.weekStart ?? date, 7))}>{t('schedule.next')}</button>
+          <div className="btn-row">
+            <button className="secondary" onClick={() => setDate(addDays(week?.weekStart ?? date, -7))}>{t('schedule.prev')}</button>
+            <button className="secondary" onClick={() => setDate(todayLocal())}>{t('schedule.today')}</button>
+            <button className="secondary" onClick={() => setDate(addDays(week?.weekStart ?? date, 7))}>{t('schedule.next')}</button>
+          </div>
         </div>
-      </Card>
+      </div>
       {!week ? <Loading /> : (
         <Card
           title={`${dayLabel(week.days[0]!)} – ${dayLabel(week.days[6]!)} · ${week.branch.timezone}`}
@@ -132,11 +134,11 @@ export default function SchedulePage() {
             <tbody>
               {week.employees.map((p) => (
                 <tr key={p.id}>
-                  <td>{p.firstName} {p.lastName}{p.temporary && <span className="muted"> (temporal)</span>}</td>
+                  <td className="who-cell">{p.firstName} {p.lastName}{p.temporary && <span className="muted"> (temporal)</span>}</td>
                   {week.days.map((d) => {
                     const cell = week.shifts.filter((s) => s.employeeId === p.id && s.businessDate === d);
                     return (
-                      <td key={d}>
+                      <td key={d} data-label={dayLabel(d)} className={cell.length === 0 ? 'rest-cell' : ''}>
                         {cell.map((s) => (
                           <button key={s.id} className={`shift ${s.status === 'CANCELLED' ? 'cancelled' : ''}`} onClick={() => setDialog({ shift: s })} title={`${s.startDate} ${s.startTime} → ${s.endDate} ${s.endTime}`}>
                             {shiftLabel(s)}

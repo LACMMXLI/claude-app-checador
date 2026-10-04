@@ -133,3 +133,23 @@ export function Loading() {
     </div>
   );
 }
+
+/** Bloque plegable para altas y formularios secundarios: la lista queda como protagonista. Nativo (`details`): teclado y lector de pantalla gratis. */
+export function Disclosure({ title, icon = 'plus', defaultOpen = false, children }: { title: string; icon?: IconName; defaultOpen?: boolean; children: ReactNode }) {
+  return (
+    <details className="disclosure" open={defaultOpen}>
+      <summary><span className="card-icon"><Icon name={icon} size={16} /></span>{title}</summary>
+      <div className="body">{children}</div>
+    </details>
+  );
+}
+
+/** Ayuda contextual breve, plegada por defecto. */
+export function Help({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="help">
+      <summary>{summary}</summary>
+      <p>{children}</p>
+    </details>
+  );
+}

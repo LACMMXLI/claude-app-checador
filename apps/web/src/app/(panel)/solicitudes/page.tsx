@@ -115,7 +115,7 @@ function RequestsView() {
   return (
     <>
       <h1>{t('req.title')}</h1>
-      <div className="row" style={{ marginBottom: '1rem' }}>
+      <div className="filters">
         <Field label={t('common.status')}>
           <select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
             <option value="">{t('live.all')}</option>

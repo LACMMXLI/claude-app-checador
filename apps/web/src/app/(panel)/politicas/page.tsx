@@ -42,7 +42,7 @@ function PoliciesView() {
     <>
       <h1>{t('policies.title')}</h1>
       <ErrorBox message={error ?? action.error} />
-      <Card>
+      <div className="filters">
         <div className="row">
           <Field label={t('common.branch')}>
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -64,7 +64,7 @@ function PoliciesView() {
             </select>
           </Field>
         </div>
-      </Card>
+      </div>
       <Card>
         {!data ? <Loading /> : (
           <table>

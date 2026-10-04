@@ -123,6 +123,7 @@ test('(53) solicitud en kiosco → aprobación en el panel → corrección audit
   await page.reload();
   await expect(page.getByTestId('pending-badge')).toBeVisible();
   expect((await sessionsOf(page, dani.id))[0].startedAt).toBe(session.startedAt);
+  await page.getByRole('link', { name: /Operación/ }).click();
   await page.getByRole('link', { name: /Solicitudes/ }).click();
   await expect(page.getByRole('heading', { name: 'Solicitudes de corrección' })).toBeVisible();
   const row = page.getByTestId('requests').locator('tr').filter({ hasText: dani.lastName });
@@ -241,7 +242,7 @@ test('(56) reportes con periodo rápido y descarga XLSX/CSV', async ({ page, bro
   await apiPunches(kiosk, gina.pin, ['CLOCK_IN', 'CLOCK_OUT']);
   await context.close();
 
-  await page.getByRole('link', { name: 'Reportes' }).click();
+  await page.getByRole('link', { name: 'Reportes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reportes' })).toBeVisible();
   await page.getByTestId('report-kind').selectOption({ label: 'Detalle de jornadas' });
   await page.getByTestId('report-period').selectOption({ label: 'Hoy' });

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useBranches } from '@/components/attendance';
-import { Card, Empty, ErrorBox, Field, Loading, useAction } from '@/components/ui';
+import { Icon } from '@/components/icons';
+import { Card, Empty, ErrorBox, Field, Help, Loading, useAction } from '@/components/ui';
 import { api, download, type Employee, type PeriodKey, type ReportKind, type ReportTable } from '@/lib/api';
 import { t } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -71,9 +72,9 @@ export default function ReportsPage() {
   return (
     <>
       <h1>{t('reports.title')}</h1>
-      <p className="muted">{t('reports.help')}</p>
-      <Card>
-        <div className="row">
+      <Help summary={t('reports.helpSummary')}>{t('reports.help')}</Help>
+      <div className="filters">
+        <div className="row" style={{ width: '100%' }}>
           <Field label={t('reports.report')}>
             <select value={filters.report} onChange={(e) => setFilters({ ...filters, report: e.target.value as ReportKind })} data-testid="report-kind">
               {KINDS.map((k) => <option key={k} value={k}>{t(`reports.kind.${k}`)}</option>)}
@@ -110,14 +111,21 @@ export default function ReportsPage() {
           <button className="primary" disabled={query.busy} onClick={() => void run()} data-testid="report-run">{t('reports.run')}</button>
           {can('reports.export') && (
             <>
-              <button disabled={exporting.busy} onClick={() => void exportAs('xlsx')} data-testid="export-xlsx">{t('reports.export')} XLSX</button>
-              <button disabled={exporting.busy} onClick={() => void exportAs('csv')} data-testid="export-csv">{t('reports.export')} CSV</button>
+              <button className="secondary" disabled={exporting.busy} onClick={() => void exportAs('xlsx')} data-testid="export-xlsx">{t('reports.export')} XLSX</button>
+              <button className="secondary" disabled={exporting.busy} onClick={() => void exportAs('csv')} data-testid="export-csv">{t('reports.export')} CSV</button>
             </>
           )}
         </div>
-      </Card>
+      </div>
       <ErrorBox message={query.error ?? exporting.error} />
-      {query.busy && !table ? <Loading /> : table && (
+      {query.busy && !table ? <Loading /> : !table ? (
+        <Card><div className="empty"><span className="empty-icon"><Icon name="chart" size={28} /></span><p>{t('reports.idle')}</p></div></Card>
+      ) : (
+        <>
+          <div className="kpis" data-testid="report-summary">
+            <div className="kpi t-blue"><div className="kpi-top"><span className="kpi-icon"><Icon name="chart" size={18} /></span>{t(`reports.kind.${table.report}`)}</div><div className="kpi-value">{table.rows.length}</div><div className="kpi-note">{t('reports.rows')} · {table.from} → {table.to}</div></div>
+          </div>
+
         <Card title={`${t(`reports.kind.${table.report}`)} · ${table.from} → ${table.to} · ${table.rows.length} ${t('reports.rows')}`}>
           {table.rows.length === 0 ? <Empty /> : (
             <>
@@ -133,6 +141,7 @@ export default function ReportsPage() {
             </>
           )}
         </Card>
+        </>
       )}
     </>
   );

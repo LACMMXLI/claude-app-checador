@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useState } from 'react';
-import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
+import { Card, Disclosure, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch } from '@/lib/api';
 import { t } from '@/lib/i18n';
 
@@ -56,7 +56,7 @@ export default function KiosksPage() {
       <p className="muted">{t('kiosks.howTo')}</p>
       <ErrorBox message={error ?? action.error} />
       {secret && <OneTimeSecret label={t('kiosks.tokenCreated')} value={secret} onClose={() => setSecret(null)} />}
-      <Card title={t('kiosks.new')}>
+      <Disclosure title={t('kiosks.new')}>
         <form className="row" onSubmit={create}>
           <Field label={t('common.name')}><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <Field label={t('common.branch')}>
@@ -67,7 +67,7 @@ export default function KiosksPage() {
           </Field>
           <button className="primary" disabled={action.busy}>{t('common.create')}</button>
         </form>
-      </Card>
+      </Disclosure>
       <Card>
         {!data ? <Loading /> : data.length === 0 ? <Empty /> : (
           <table>

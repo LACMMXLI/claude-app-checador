@@ -79,7 +79,7 @@ export default function IncidentsPage() {
   return (
     <>
       <h1>{t('incident.title')}</h1>
-      <div className="row" style={{ marginBottom: '1rem' }}>
+      <div className="filters">
         <Field label={t('common.branch')}>
           <select value={filter.branchId} onChange={(e) => setFilter({ ...filter, branchId: e.target.value })}>
             <option value="">{t('live.all')}</option>

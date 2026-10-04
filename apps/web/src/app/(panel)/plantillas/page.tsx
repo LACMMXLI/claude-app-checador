@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormEvent, useEffect, useState } from 'react';
-import { Card, Empty, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
+import { Card, Disclosure, Empty, ErrorBox, Field, Loading, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee } from '@/lib/api';
 import { t } from '@/lib/i18n';
 
@@ -49,7 +49,7 @@ export default function TemplatesPage() {
       <h1>{t('nav.templates')}</h1>
       <ErrorBox message={list.error ?? action.error} />
       {message && <p role="status">{message}</p>}
-      <Card title="Nueva plantilla">
+      <Disclosure title="Nueva plantilla">
         <form className="row" onSubmit={create}>
           <Field label={t('common.branch')}>
             <select required value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
@@ -60,10 +60,17 @@ export default function TemplatesPage() {
           <Field label={t('common.name')}><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <button className="primary" disabled={action.busy}>{t('common.create')}</button>
         </form>
-      </Card>
+      </Disclosure>
       <Card>
         {!list.data ? <Loading /> : list.data.length === 0 ? <Empty /> : (
-          <div className="row">{list.data.map((tpl) => <button key={tpl.id} onClick={() => void open(tpl.id)}>{tpl.name}</button>)}</div>
+          <ul className="mini-list">
+            {list.data.map((tpl) => (
+              <li key={tpl.id}>
+                <span><strong>{tpl.name}</strong> <span className="muted">· {branches.data?.find((b) => b.id === tpl.branchId)?.name ?? '—'}</span></span>
+                <button className={current?.id === tpl.id ? 'primary' : 'secondary'} onClick={() => void open(tpl.id)}>{tpl.name}</button>
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
       {current && (

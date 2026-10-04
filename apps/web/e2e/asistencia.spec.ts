@@ -140,7 +140,7 @@ test('(51) administrativo: turno publicado → Entrada tardía → tablero → c
   await context.close();
 
   // Tablero en vivo: Trabajando con los minutos REALES de retardo
-  await page.getByRole('link', { name: 'Asistencia en vivo' }).click();
+  await page.getByRole('link', { name: 'Asistencia', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Asistencia en vivo' })).toBeVisible();
   await page.getByLabel('Sucursal').selectOption({ label: 'Venecia' });
   const row = page.getByTestId(`live-row-${beto.id}`);
@@ -186,6 +186,7 @@ test('(52) falta: turno publicado sin Entrada → reconciliación → FALTA → 
   // idempotente: otra ejecución no duplica
   execFileSync('node', [path.resolve(process.cwd(), '../api/dist/src/cli/reconcile.js')], { env: { ...process.env, DATABASE_URL: process.env.E2E_APP_DATABASE_URL } });
 
+  await page.getByRole('link', { name: 'Operación' }).click();
   await page.getByRole('link', { name: 'Incidencias' }).click();
   await expect(page.getByRole('heading', { name: 'Incidencias' })).toBeVisible();
   await page.getByLabel('Incidencias').selectOption({ label: 'Falta' });
