@@ -1,5 +1,5 @@
 # Producción (Coolify → "Docker Compose"). Variables: ver .env.example
-# Orden: db → init (roles + migraciones, idempotente en cada despliegue) → api
+# Orden: db → init (roles + migraciones, idempotente en cada despliegue) → api (+ platform-api)
 services:
   db:
     image: postgres:16-alpine
@@ -78,6 +78,54 @@ services:
       retries: 5
       start_period: 20s
 
+  # ── Consola de plataforma (Fase 5, D-81): gestión de clientes, planes y suscripciones del SaaS ──────────────────
+  # Plano SEPARADO del de los clientes: otro dominio, otra cookie, otros usuarios (operadores). Es el ÚNICO servicio
+  # HTTP que recibe credenciales de plataforma (rol platform_ops, BYPASSRLS); la API de clientes (`api`) jamás las recibe.
+  # Primer operador (una vez):
+  #   docker compose --profile tools run --rm platform-admin create-operator --email tu@correo.com --name "Tu nombre" --password '<mín. 10>'
+  platform-api:
+    build: { context: ., dockerfile: apps/platform-api/Dockerfile }
+    restart: unless-stopped
+    depends_on:
+      init: { condition: service_completed_successfully }
+    environment:
+      PLATFORM_DATABASE_URL: postgresql://platform_ops:${PLATFORM_OPS_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
+      PORT: 3100
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}     # cookie __Host-psid con Secure: la consola debe servirse por HTTPS
+      # Barrido de vencimientos de suscripciones (segundos; 0 = apagado). Idempotente.
+      SWEEP_INTERVAL_SEC: ${SWEEP_INTERVAL_SEC:-60}
+      # IP real del operador (solo informativa: sesiones y bitácora). Misma cadena que la API de clientes:
+      # Traefik → platform-web → platform-api (1 salto propio).
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-loopback,uniquelocal}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      NODE_ENV: production
+      TZ: UTC
+    expose: ["3100"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Consola web (Next.js). Se publica con SU PROPIO dominio en Coolify (p. ej. admin.tudominio.com), distinto del panel de
+  # clientes. Reenvía /api a `platform-api` por la red interna. Detrás de Traefik (`expose`, nunca `ports`).
+  platform-web:
+    build: { context: ., dockerfile: apps/platform-web/Dockerfile }
+    restart: unless-stopped
+    depends_on:
+      platform-api: { condition: service_healthy }
+    environment:
+      PLATFORM_API_INTERNAL_URL: http://platform-api:3100
+      PORT: 3002
+    expose: ["3002"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   # Herramienta de operación (NO arranca sola):
   #   docker compose --profile tools run --rm platform create-organization --name Fatboy --slug fatboy --timezone America/Tijuana ...
   platform:
@@ -86,6 +134,19 @@ services:
     depends_on:
       init: { condition: service_completed_successfully }
     entrypoint: ["node", "dist/src/cli/platform.js"]
+    environment:
+      PLATFORM_DATABASE_URL: postgresql://platform_ops:${PLATFORM_OPS_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
+
+  # Operadores de la consola (NO arranca sola):
+  #   docker compose --profile tools run --rm platform-admin create-operator --email ... --name ... --password ...
+  #   docker compose --profile tools run --rm platform-admin reset-operator-password --email ... --password ...
+  #   docker compose --profile tools run --rm platform-admin list-operators
+  platform-admin:
+    profiles: ["tools"]
+    build: { context: ., dockerfile: apps/platform-api/Dockerfile }
+    depends_on:
+      init: { condition: service_completed_successfully }
+    entrypoint: ["node", "dist/src/cli/platform-admin.js"]
     environment:
       PLATFORM_DATABASE_URL: postgresql://platform_ops:${PLATFORM_OPS_PASSWORD:?}@db:5432/${POSTGRES_DB:-checador}
 

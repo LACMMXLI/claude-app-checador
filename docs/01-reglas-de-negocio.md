@@ -351,4 +351,17 @@ Muestra los estados de §11 (RN-INC-06) más: **En comida** (minutos transcurrid
 
 ## 19. Fuera del alcance (la arquitectura lo prevé)
 
-Facturación, suscripciones, planes, pagos y onboarding comercial · UI de administración de plataforma · subdominios por negocio · recuperación de contraseña por correo · alta de usuarios por el administrador del negocio (invitaciones) · QR / cámara / biometría · **modo offline real** · vacaciones, permisos, incapacidades · días festivos · horas extra, nómina, periodos de pago y cualquier cálculo de pago · reglas "N retardos = 1 falta" · notificaciones · PDF · rol de RH · módulos futuros (mesas, adelantos, nómina, comunicados) · aprobación multinivel o "aprobar con ajuste" · reportes programados o por correo.
+Pagos, cobros y facturación · autoservicio de alta/onboarding por el propio cliente · subdominios por negocio · recuperación de contraseña por correo · alta de usuarios por el administrador del negocio (invitaciones) · QR / cámara / biometría · **modo offline real** · vacaciones, permisos, incapacidades · días festivos · horas extra, nómina, periodos de pago y cualquier cálculo de pago · reglas "N retardos = 1 falta" · notificaciones · PDF · rol de RH · módulos futuros (mesas, adelantos, nómina, comunicados) · aprobación multinivel o "aprobar con ajuste" · reportes programados o por correo.
+
+## 20. Planes y suscripciones (Fase 5)
+
+- **RN-PLAN-01** La plataforma se administra desde una **consola separada** de la app de los negocios; sus operadores no son usuarios de ningún negocio.
+- **RN-PLAN-02** Los operadores inician sesión con credenciales propias; todas sus acciones quedan en la bitácora de plataforma (sin contraseñas ni tokens).
+- **RN-PLAN-03** Existen **planes** con límites de sucursales, empleados activos, kioscos activos y usuarios, y con funciones (exportar reportes, plantillas de horario). Los dos planes iniciales (Básico y Avanzado) los edita un operador; un plan inactivo no se asigna a negocios nuevos.
+- **RN-PLAN-04** Cada negocio tiene **una suscripción** (plan, estado y vigencia fijados a mano; **sin pagos**). Solo `TRIAL` y `ACTIVE` operan; `SUSPENDED`, `EXPIRED` y `CANCELLED` suspenden el acceso de inmediato. **Ningún dato se borra** al suspender, vencer o cancelar, y se puede reactivar.
+- **RN-PLAN-05** Los límites cuentan **solo registros activos**; desactivar o dar de baja libera cupo. El límite lo hace cumplir PostgreSQL además del servicio.
+- **RN-PLAN-06** **Bajar de plan nunca borra ni desactiva datos**: solo impide crear o reactivar por encima del nuevo límite (el operador ve un aviso con lo que ya excede).
+- **RN-PLAN-07** El negocio ve su plan, estado, vigencia, límites y uso; nunca las notas internas ni datos de otros negocios.
+- **RN-PLAN-08** Todo cambio de plan, estado o vigencia queda en un historial inmutable con el responsable.
+- **RN-PLAN-09** Un cliente nuevo se crea con negocio, sucursales, primer administrador y suscripción en una sola operación; la contraseña inicial se muestra una vez.
+- **RN-PLAN-10** Todo negocio tiene siempre una suscripción (los existentes y los creados por CLI quedan en Avanzado/Activo, sin vencimiento).

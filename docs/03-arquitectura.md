@@ -127,9 +127,12 @@ Una función pura (`common/operational-day.ts`) y un solo resolvedor de calendar
 │  │  └─ app.module.ts, main.ts
 │  └─ test/                          # 24 archivos, PostgreSQL real
 ├─ apps/web/                         # panel Next.js (proxy /api, i18n, E2E Playwright)
-├─ scripts/e2e.sh                    # E2E contra API + PostgreSQL reales
+├─ apps/platform-api/                # Fase 5: API de la consola de plataforma (rol platform_ops; operadores, clientes, planes, suscripciones)
+├─ apps/platform-web/                # Fase 5: consola Next.js (proxy /api, E2E Playwright)
+├─ scripts/e2e.sh                    # E2E del panel contra API + PostgreSQL reales
+├─ scripts/e2e-platform.sh           # E2E de la consola (+ API de clientes para comprobar el efecto real)
 ├─ docs/                             # reglas, modelo, arquitectura, operación
-├─ docker-compose.yml                # producción (Coolify): db → init → api (+ perfil tools)
+├─ docker-compose.yml                # producción (Coolify): db → init → api, web, platform-api, platform-web (+ perfil tools)
 ├─ docker-compose.dev.yml
 └─ .github/workflows/ci.yml
 ```
@@ -187,6 +190,10 @@ Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_
 
 > Estado honesto: los `Dockerfile`/`docker-compose.yml` no se han podido ejecutar (el entorno de desarrollo no tiene Docker). Sí se verificó el flujo equivalente con los artefactos compilados contra PostgreSQL real: bootstrap → migrate → `check:tenancy` → alta de Fatboy → API → panel (incluido el servidor *standalone* de Next) → E2E con Playwright. GitHub Actions: ✅ en verde desde el run #5.
 
+**Consola de plataforma (Fase 5, D-81…D-90).** Dos planos: el de los **clientes** (`api` + `web`, rol `app_user`, RLS) y el de **plataforma** (`platform-api` + `platform-web`, rol `platform_ops`). El plano de plataforma tiene su dominio, su cookie (`__Host-psid`), sus usuarios (operadores) y es el único servicio HTTP con credenciales de plataforma. Los planes y suscripciones viven en el esquema `platform` (sin privilegios para `app_user`); el negocio solo ve su plan por la función-puerta `core.current_entitlements()`. El estado del negocio (`organizations.status`) lo sincroniza un trigger desde la suscripción y los límites del plan los exige PostgreSQL para el tráfico de `app_user`. Contrato: `06-fase-5-contrato.md`.
+
+En Coolify, publicar con dominio **solo** `web` y `platform-web` (por ejemplo `app.tudominio.com` y `admin.tudominio.com`); `api` y `platform-api` quedan en la red interna.
+
 ## 10. Plan por fases
 
 | Fase | Entrega | Estado |
@@ -196,8 +203,9 @@ Servicio `web` (Next.js standalone): único con dominio público; `API_INTERNAL_
 | **2 · Horarios y turnos** | Horario semanal DRAFT/PUBLISHED, turno concreto con zona y DST, traslapes en PostgreSQL, alcance del encargado, histórico protegido, concurrencia optimista, copiar semana, plantillas; pantalla "Horario semanal", plantillas y próximos turnos del empleado | ✅ **Hecha** |
 | **3 · Asistencia** | D-33; kiosco táctil con activación segura; jornadas, eventos inmutables, pausas, matching con turnos oficiales, día operativo, incidencias, reconciliación, correcciones auditadas, tablero (consulta cada 30 s), jornadas, incidencias, historial | ✅ **Hecha** |
 | **4 · Cierre del ciclo** | D-66…D-77: FALTA anulada por el plan, salida anticipada, sin comida, pausa omitida; solicitudes de corrección (kiosco y panel) con aprobación exacta o rechazo; reportes con periodos rápidos y exportación XLSX/CSV; tablero y bandeja en tiempo real (SSE + polling); estado, último uso y revocación inmediata de kioscos | ✅ **Hecha** (contrato `05-fase-4-contrato.md`) |
+| **5 · Plataforma de suscripciones** | D-81…D-90: consola de plataforma (operadores, clientes, planes, suscripciones sin cobros, bitácora), límites y funciones por plan aplicados en la app de clientes y en PostgreSQL, «Mi plan» para el cliente | ✅ **Hecha** (contrato `06-fase-5-contrato.md`) |
 | Siguiente | Reprocesos por cambio de política, autoservicio ampliado (horarios en kiosco), PDF, notificaciones | Pendiente |
-| Después | Recuperación por correo, modo offline, PDF, QR/cámara, nómina, UI de plataforma, planes/facturación | — |
+| Después | Recuperación por correo, modo offline, PDF, QR/cámara, nómina, cobros y facturación | — |
 
 ## 11. Riesgos y mitigaciones
 

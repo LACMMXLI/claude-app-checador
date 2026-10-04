@@ -77,8 +77,8 @@ describe('suscripción inicial (D-89) y estado del negocio (D-84)', () => {
     const sub = (await pools.superuser.query('SELECT * FROM platform.subscriptions WHERE organization_id = $1', [b.organizationId])).rows[0];
     expect([sub.plan_code, sub.status]).toEqual(['BASIC', 'TRIAL']);
     expect(new Date(sub.trial_ends_at).getTime()).toBe(end.getTime());
-    const events = (await pools.superuser.query(`SELECT event, actor FROM platform.subscription_events WHERE organization_id = $1 ORDER BY id`, [b.organizationId])).rows;
-    expect(events.map((e) => e.event)).toEqual(['CREATED', 'PLAN_CHANGED', 'STATUS_CHANGED', 'PERIOD_CHANGED']);
+    const events = (await pools.superuser.query(`SELECT event, to_plan, to_status, actor FROM platform.subscription_events WHERE organization_id = $1 ORDER BY id`, [b.organizationId])).rows;
+    expect(events.map((e) => [e.event, e.to_plan, e.to_status])).toEqual([['CREATED', 'BASIC', 'TRIAL']]); // el historial empieza con lo elegido, no con el valor por defecto
     expect(new Set(events.map((e) => e.actor))).toEqual(new Set(['prueba:operador']));
   });
 

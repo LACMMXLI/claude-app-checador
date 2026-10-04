@@ -52,7 +52,7 @@ jobs:
           # Falla el pipeline si alguna tabla multi-tenant no tiene organization_id + RLS forzado + política
           pnpm check:tenancy
 
-      - name: Pruebas (incluye aislamiento A↔B de lectura/escritura y detección de tablas sin protección)
+      - name: "Pruebas (API de clientes: aislamiento A↔B y límites de plan · API de plataforma: operadores, clientes y suscripciones)"
         run: pnpm test
 
       - name: E2E del panel y del kiosco (Playwright + API + PostgreSQL reales)
@@ -61,6 +61,11 @@ jobs:
         run: |
           pnpm --filter @checador/web exec playwright install --with-deps chromium
           ./scripts/e2e.sh
+
+      - name: E2E de la consola de plataforma (Playwright + API de plataforma + API de clientes + PostgreSQL reales)
+        env:
+          E2E_PG_SUPER_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: ./scripts/e2e-platform.sh
 
       - name: Smoke de arranque de la API (compilada)
         env:
@@ -76,3 +81,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://app_user:ci-app-user@localhost:5432/checador_ci
         run: node apps/api/dist/src/cli/reconcile.js
+
+      - name: Smoke de arranque de la API de plataforma (compilada, como platform_ops)
+        env:
+          PLATFORM_DATABASE_URL: postgresql://platform_ops:ci-platform-ops@localhost:5432/checador_ci
+          PORT: "3100"
+        run: |
+          node apps/platform-api/dist/src/main.js &
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:3100/health && exit 0; sleep 1; done
+          echo "La API de plataforma no respondió /health" && exit 1

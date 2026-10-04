@@ -1,0 +1,39 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(console)/layout,_N_T_/(console)/operadores/layout,_N_T_/(console)/operadores/page,_N_T_/operadores"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGNvbnNvbGUp/operadores/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 64,
+    "slots": {
+      "children": {
+        "hints": 96,
+        "slots": {
+          "children": {
+            "hints": 96,
+            "slots": {
+              "children": {
+                "hints": 160,
+                "slots": null
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/d8e32409c55299423feb81360632c2ae60d5dc0aba8be1438afb866bf37fda72/$/operadores",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/(console)/operadores/page"
+    },
+    "isFallback": false
+  }
+}

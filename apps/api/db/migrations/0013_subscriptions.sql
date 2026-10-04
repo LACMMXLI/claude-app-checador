@@ -119,11 +119,13 @@ INSERT INTO platform.subscriptions (organization_id, plan_code, status)
 SELECT o.id, 'ADVANCED', CASE o.status WHEN 'ACTIVE' THEN 'ACTIVE' ELSE 'SUSPENDED' END FROM core.organizations o;
 
 -- Todo negocio nuevo recibe una suscripción (ADVANCED/ACTIVE) aunque no se cree desde la consola (CLI, pruebas).
--- La consola la reemplaza de inmediato por el plan y estado elegidos.
+-- La consola indica su propia suscripción en la misma transacción (app.subscription_provided = on) y el trigger no interviene,
+-- así el historial empieza con el plan y estado elegidos y no con el valor por defecto.
 CREATE FUNCTION platform.create_default_subscription() RETURNS trigger
 LANGUAGE plpgsql AS
 $$
 BEGIN
+  IF current_setting('app.subscription_provided', true) = 'on' THEN RETURN NEW; END IF;
   INSERT INTO platform.subscriptions (organization_id, plan_code, status) VALUES (NEW.id, 'ADVANCED', 'ACTIVE')
   ON CONFLICT (organization_id) DO NOTHING;
   RETURN NEW;

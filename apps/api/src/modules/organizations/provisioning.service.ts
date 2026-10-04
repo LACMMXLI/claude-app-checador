@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { DomainError } from '../../common/errors.js';
 import type { PlatformDb } from '../../common/tenancy/platform-db.js';
@@ -98,27 +98,27 @@ export class PlatformAdminService {
     const input = parsed.data;
 
     return this.platformDb.run(async (tx) => {
+      // D-84: con suscripción indicada, el trigger de BD no crea la de por defecto; se inserta la elegida en esta misma transacción
+      if (input.subscription) {
+        const [plan] = await tx.select().from(plans).where(eq(plans.code, input.subscription.planCode));
+        if (!plan) throw new DomainError('PLAN_NOT_FOUND');
+        if (!plan.isActive) throw new DomainError('PLAN_NOT_ACTIVE');
+        await tx.execute(sql`select set_config('app.subscription_provided', 'on', true)`);
+      }
       const [org] = await tx
         .insert(organizations)
         .values({ slug: input.slug, name: input.name, timezone: input.timezone })
         .returning();
       const organizationId = org!.id;
-
-      // D-84: el trigger de BD dejó ADVANCED/ACTIVE; si se indicó otra suscripción, se aplica en la misma transacción
       if (input.subscription) {
-        const [plan] = await tx.select().from(plans).where(eq(plans.code, input.subscription.planCode));
-        if (!plan) throw new DomainError('PLAN_NOT_FOUND');
-        if (!plan.isActive) throw new DomainError('PLAN_NOT_ACTIVE');
-        await tx
-          .update(subscriptions)
-          .set({
-            planCode: input.subscription.planCode,
-            status: input.subscription.status,
-            trialEndsAt: input.subscription.status === 'TRIAL' ? input.subscription.trialEndsAt! : null,
-            currentPeriodEnd: input.subscription.status === 'ACTIVE' ? (input.subscription.currentPeriodEnd ?? null) : null,
-            notes: input.subscription.notes ?? '',
-          })
-          .where(eq(subscriptions.organizationId, organizationId));
+        await tx.insert(subscriptions).values({
+          organizationId,
+          planCode: input.subscription.planCode,
+          status: input.subscription.status,
+          trialEndsAt: input.subscription.status === 'TRIAL' ? input.subscription.trialEndsAt! : null,
+          currentPeriodEnd: input.subscription.status === 'ACTIVE' ? (input.subscription.currentPeriodEnd ?? null) : null,
+          notes: input.subscription.notes ?? '',
+        });
       }
 
       const branchIds: Record<string, string> = {};

@@ -40,10 +40,11 @@ La API de clientes **no** conoce `platform_ops` (lo vigila `test/architecture.te
 - **D-85 · Historial inmutable.** `platform.subscription_events` (solo-agregar) lo escribe un trigger por cada cambio de plan,
   estado, vigencia o notas, con el operador responsable (`app.platform_actor`). Además, cada acción de operador queda en
   `platform.platform_audit_log`.
-- **D-86 · Límites en tres capas.** (1) Los servicios del panel de clientes verifican el cupo y responden
-  `PLAN_LIMIT_*` con el detalle (límite y uso). (2) Un trigger de PostgreSQL lo exige aunque el código falle
-  (solo para el tráfico de `app_user`; el CLI/operadores de plataforma pueden exceder por decisión operativa). (3) Las
-  funciones del plan (`FEATURE_NOT_IN_PLAN`) se verifican en el servicio. Solo cuentan los registros **activos**; desactivar
+- **D-86 · Límites en capas.** (1) Un trigger de PostgreSQL exige el cupo de sucursales, empleados, kioscos y usuarios activos para
+  el tráfico de `app_user` y responde `PLAN_LIMIT_*` (también cuando se acepta una invitación, que no pasa por el servicio);
+  los operadores de plataforma pueden exceder por decisión operativa. (2) El servicio de invitaciones verifica el cupo de usuarios
+  (activos + invitaciones pendientes) al invitar y devuelve el límite y el uso. (3) Las funciones del plan
+  (`FEATURE_NOT_IN_PLAN`) se verifican en el servicio. Solo cuentan los registros **activos**; desactivar
   libera cupo. **Bajar de plan nunca borra ni desactiva datos**: solo se impide crear/reactivar por encima del nuevo límite.
 - **D-87 · El cliente ve su plan.** `GET /api/subscription` (solo lectura: plan, estado, vigencia, límites y uso) y la pestaña
   **Configuración → Plan**. Las notas internas y los datos de otros negocios nunca salen de la plataforma.
@@ -58,13 +59,16 @@ La API de clientes **no** conoce `platform_ops` (lo vigila `test/architecture.te
 ## Estados de la suscripción (transiciones permitidas desde la consola)
 
 ```
-            ┌──────────── activar(plan, vigencia) ────────────┐
- (alta) → TRIAL ──(vence)──► EXPIRED ──activar──► ACTIVE ──(vence)──► EXPIRED
-              └──suspender──► SUSPENDED ──reanudar──► (TRIAL|ACTIVE según vigencia)
- cualquier estado ──cancelar──► CANCELLED ──reactivar──► ACTIVE
+ (alta) ─► TRIAL ──(vence)──► EXPIRED ──activar──► ACTIVE ──(vence)──► EXPIRED
+             │                                       ▲
+             └──────── suspender (TRIAL/ACTIVE/EXPIRED) ─► SUSPENDED ──activar──┘
+ cualquier estado ──cancelar──► CANCELLED ──activar──► ACTIVE
+ (cualquier estado) ──iniciar prueba──► TRIAL
 ```
 
-- Cambiar de plan no cambia el estado. Extender vigencia sí puede reactivar un `EXPIRED`.
+Acciones de la consola: **cambiar plan** (no cambia el estado), **activar/renovar** (ACTIVE con vigencia futura o sin vencimiento),
+**iniciar prueba** (TRIAL de 1–90 días), **extender** (solo TRIAL o ACTIVE), **suspender** y **cancelar** (con motivo) y **notas internas**.
+- Reanudar un negocio suspendido, vencido o cancelado es **activar**.
 - La consola muestra el estado **efectivo**; la verdad está en PostgreSQL.
 
 ## Fuera de alcance (otra fase)

@@ -1,0 +1,14 @@
+{
+  "/(console)/bitacora/page": "app/(console)/bitacora/page.js",
+  "/(console)/clientes/[id]/page": "app/(console)/clientes/[id]/page.js",
+  "/(console)/clientes/nuevo/page": "app/(console)/clientes/nuevo/page.js",
+  "/(console)/clientes/page": "app/(console)/clientes/page.js",
+  "/(console)/cuenta/page": "app/(console)/cuenta/page.js",
+  "/(console)/operadores/page": "app/(console)/operadores/page.js",
+  "/(console)/page": "app/(console)/page.js",
+  "/(console)/planes/page": "app/(console)/planes/page.js",
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/[...path]/route": "app/api/[...path]/route.js",
+  "/login/page": "app/login/page.js"
+}

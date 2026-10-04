@@ -1,4 +1,4 @@
-# 04 · Operación (Fases 0–4)
+# 04 · Operación (Fases 0–5)
 
 ## 1. Desarrollo local
 
@@ -45,6 +45,23 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
 
 11. **IP real del cliente (D-79).** Con este `docker-compose.yml` no hay que hacer nada: la API confía solo en su par de la red interna (`TRUSTED_PROXIES=loopback,uniquelocal`, `TRUSTED_PROXY_HOPS=1`) y registra la IP que puso Traefik. Requisitos: publicar **solo** `web` con dominio en Coolify (Traefik delante), sin `ports` en `web` ni en `api`. Con un CDN/proxy extra delante de Traefik (p. ej. Cloudflare en modo proxy): configurar en Traefik de Coolify `forwardedHeaders.trustedIPs` con los rangos del CDN, y en la API agregar esos rangos a `TRUSTED_PROXIES` y usar `TRUSTED_PROXY_HOPS=2`. Para comprobarlo: Panel → Kioscos → "Última IP" debe mostrar la IP pública de la sucursal, no una `10.x`/`172.x`. La IP es solo informativa: nunca autentica ni autoriza.
 
+## 2.0 Consola de plataforma (Fase 5)
+
+La consola administra **clientes, planes y suscripciones** (sin pagos). Vive en los servicios `platform-api` y `platform-web` del mismo `docker-compose.yml`.
+
+1. En Coolify, asigna un **segundo dominio** (HTTPS) **solo al servicio `platform-web`** (p. ej. `admin.tudominio.com`); `platform-api` queda interno. `web` conserva el dominio del panel de clientes. Variables nuevas: ninguna obligatoria (`SWEEP_INTERVAL_SEC=60` es opcional); reutiliza `PLATFORM_OPS_PASSWORD`, `COOKIE_SECURE` y `TRUSTED_PROXIES`.
+2. Tras el despliegue, crea al **primer operador** (una vez):
+   ```bash
+   docker compose --profile tools run --rm platform-admin create-operator --email tu@correo.com --name "Tu nombre" --password '<mínimo 10 caracteres>'
+   ```
+   Después, desde la consola → **Operadores** puedes crear más (la contraseña generada se muestra una vez). Si olvidas la tuya: `... platform-admin reset-operator-password --email tu@correo.com --password '<nueva>'`.
+3. Entra a `https://admin.tudominio.com`, abre **Clientes → Nuevo cliente** y elige plan (Básico/Avanzado), prueba o activo, y la vigencia. La contraseña inicial del administrador del cliente se muestra **una vez**: entrégasela. El cliente entra por el dominio del panel (`https://app.tudominio.com`).
+4. **Suspender / activar / cambiar de plan / extender vigencia / cancelar** se hacen en el detalle del cliente; surten efecto de inmediato (la sesión viva del cliente se corta y no puede volver a entrar hasta reactivarlo). Nada se borra. Una prueba o vigencia que vence pasa sola a **Vencido** (barrido cada `SWEEP_INTERVAL_SEC` s).
+5. **Fatboy y los negocios que ya existían** quedaron en **Avanzado/Activo, sin vencimiento** al aplicar la migración 0013; puedes cambiarlos desde la consola.
+6. Los valores de los planes (límites y funciones) se editan en **Planes**; aplican de inmediato y nunca borran datos de nadie.
+7. La consola y el panel de clientes usan **cookies y cabeceras CSRF distintas**: una sesión de uno no sirve en el otro. Protege el dominio de la consola (p. ej. restringe por IP/VPN en Traefik si puedes): quien la controle administra a todos los clientes.
+8. Los respaldos de la base de datos cubren también planes, suscripciones, operadores y su bitácora.
+
 ## 2.1 Antes de producción
 
 - Validación en el servidor (Coolify): construir `apps/api/Dockerfile` y `apps/web/Dockerfile`, `docker compose up` con base limpia, migraciones (`init`), API sana (`/health`), panel por HTTPS con cookie `__Host-sid`, persistencia y reinicios.
@@ -72,7 +89,7 @@ La base contiene a **todos** los negocios y su auditoría. Respaldos diarios de 
 
 ## 5. Qué NO está todavía
 
-Recuperación de contraseña por correo y envío de invitaciones por correo, notificaciones, PDF, reprocesos masivos por cambio de política, modo offline del kiosco, nómina (ver `03-arquitectura.md §10`).
+Cobros y facturación (la vigencia es manual), alta de clientes por autoservicio, recuperación de contraseña por correo y envío de invitaciones por correo, notificaciones, PDF, reprocesos masivos por cambio de política, modo offline del kiosco, nómina (ver `03-arquitectura.md §10`).
 
 ## 6. Roles de PostgreSQL son de todo el clúster
 

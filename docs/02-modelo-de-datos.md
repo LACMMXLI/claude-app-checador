@@ -322,3 +322,17 @@ Diferencia de llegada (D-41) y de salida (D-65), duración real (D-64), minutos 
 ## 11. Volumen
 
 ~50 empleados × 2–4 checadas/día ≈ 70 mil filas/año por negocio pequeño. Todos los índices empiezan por `organization_id`. Un negocio muy grande podría moverse a su propia base sin cambiar el modelo.
+
+## Fase 5 · Planes, suscripciones y operadores (esquema `platform`, migración 0013)
+
+Todas son tablas **del plano de plataforma**: sin acceso para `app_user` y registradas en `core.tenant_exempt_tables` (el negocio solo ve su plan por la función-puerta `core.current_entitlements()`).
+
+| Tabla | Contenido |
+|---|---|
+| `platform.plans` | Catálogo de planes: código, nombre, límites (`max_branches/employees/kiosks/members`, `NULL` = sin límite), funciones (`features` jsonb), disponibilidad. Semilla: `BASIC`, `ADVANCED`. |
+| `platform.subscriptions` | Una por negocio (`organization_id` PK): plan, estado (`TRIAL/ACTIVE/SUSPENDED/EXPIRED/CANCELLED`), `trial_ends_at`, `current_period_end`, notas internas. Un trigger sincroniza `core.organizations.status`. |
+| `platform.subscription_events` | Historial solo-agregar de cada cambio de plan, estado, vigencia o notas, con el responsable (`app.platform_actor`). |
+| `platform.operators`, `platform.operator_sessions` | Operadores de la consola (contraseña argon2id, bloqueo) y sus sesiones (SHA-256 del token). |
+
+Triggers de límites del plan (`core.enforce_plan_limit`) en `core.branches`, `core.employees`, `core.kiosk_devices` y `core.organization_memberships`: solo para el tráfico de `app_user`, cuentan registros activos.
+
