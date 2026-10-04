@@ -375,6 +375,8 @@ const esMX = {
   'history.title': 'Historial de asistencia',
   'history.absences': 'Faltas',
   'policy.entryToleranceMin': 'Tolerancia de entrada (min)',
+  'policy.shiftMinMinutes': 'Duración mínima de un turno (min)',
+  'policy.shiftMaxMinutes': 'Duración máxima de un turno (min)',
   'policy.exitToleranceMin': 'Tolerancia de salida (min)',
   'policy.maxBreaks': 'Pausas por jornada',
   'policy.breakAllowedMin': 'Minutos permitidos por pausa',

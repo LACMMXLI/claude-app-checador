@@ -2,12 +2,13 @@
    Tokens → base → componentes → layout → pantallas → kiosco. Claro y oscuro (prefers-color-scheme). Sin dependencias. */
 :root {
   --bg: #f8f7f2; --bg-2: #efede6; --surface: #ffffff; --surface-2: #fcfcfa;
-  --text: #102746; --muted: #697586; --border: #e6e4dc; --border-strong: #cfd3db;
+  --text: #102746; --muted: #566274; --border: #e6e4dc; --border-strong: #cfd3db;
   --primary: #155eef; --primary-2: #0f4ed1; --primary-soft: #eaf1ff; --primary-text: #ffffff;
   --coral: #ff6848; --coral-soft: #ffede8; --lime: #91d43a; --lime-soft: #f0f9e0;
-  --ok: #15803d; --ok-soft: #e3f6e9; --warn: #b45309; --warn-soft: #fff1d6; --danger: #d92d20; --danger-soft: #fde8e6;
-  --info: #155eef; --info-soft: #eaf1ff; --off: #5b6678; --off-soft: #eef0f3; --violet: #6d4bd8; --violet-soft: #efeaff; --teal: #0d7f76; --teal-soft: #dcf5f1;
+  --ok: #146c34; --ok-soft: #e3f6e9; --warn: #97470a; --warn-soft: #fff1d6; --danger: #b42318; --danger-soft: #fde8e6;
+  --info: #155eef; --info-soft: #eaf1ff; --off: #5b6678; --off-soft: #eef0f3; --violet: #6d4bd8; --violet-soft: #efeaff; --teal: #0b6a62; --teal-soft: #dcf5f1;
   --side-1: #102746; --side-2: #102746; --side-text: #d9e2f1; --side-muted: #8fa3c2;
+  --danger-solid: #b42318;
   --radius: 14px; --radius-sm: 10px;
   --shadow-sm: 0 1px 2px rgb(16 39 70 / .05);
   --shadow: 0 4px 14px rgb(16 39 70 / .08);
@@ -20,7 +21,7 @@
   :root {
     --bg: #0c1a30; --bg-2: #12233f; --surface: #132643; --surface-2: #162b4a;
     --text: #eaf0fa; --muted: #9fb0c8; --border: #23395c; --border-strong: #33507c;
-    --primary: #5b93ff; --primary-2: #86adff; --primary-soft: #16305e; --primary-text: #07142b;
+    --primary: #7aa5ff; --primary-2: #9dbcff; --primary-soft: #16305e; --primary-text: #07142b;
     --coral: #ff7f63; --coral-soft: #44211b; --lime: #a6e05a; --lime-soft: #26341a;
     --ok: #4ade80; --ok-soft: #12301d; --warn: #fbbf24; --warn-soft: #3a2a0c; --danger: #f87171; --danger-soft: #3c1616;
     --info: #86adff; --info-soft: #16305e; --off: #a3b0c4; --off-soft: #1c3150; --violet: #b69cff; --violet-soft: #281b4a; --teal: #2dd4bf; --teal-soft: #0f2f2b;
@@ -55,6 +56,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 @keyframes float { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(18px, -22px) scale(1.06); } }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Controles ── */
@@ -161,7 +163,7 @@ tr.selected td { background: var(--primary-soft); }
 .sidebar .bottom .muted { color: var(--side-muted); padding: 0 .7rem; font-size: .82rem; }
 .sidebar .bottom button.link { color: var(--side-text); display: flex; align-items: center; gap: .7rem; padding: .55rem .7rem; border-radius: 11px; width: 100%; justify-content: flex-start; font-weight: 520; font-size: .93rem; }
 .sidebar .bottom button.link:hover { background: rgb(255 255 255 / .07); text-decoration: none; color: #fff; }
-.nav-badge { background: var(--danger); color: #fff; border-radius: 999px; padding: 0 .5rem; font-size: .72rem; font-weight: 700; min-width: 1.35rem; text-align: center; line-height: 1.35rem; animation: pop .3s var(--ease); }
+.nav-badge { background: var(--danger-solid); color: #fff; border-radius: 999px; padding: 0 .5rem; font-size: .72rem; font-weight: 700; min-width: 1.35rem; text-align: center; line-height: 1.35rem; animation: pop .3s var(--ease); }
 .content { min-width: 0; display: flex; flex-direction: column; }
 .topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: .6rem; padding: .6rem 1.5rem; background: var(--bg); border-bottom: 1px solid var(--border); }
 .topbar .spacer { flex: 1; }
@@ -285,8 +287,8 @@ button.add { font-size: .9rem; margin-left: .25rem; padding: .15rem .5rem; }
 .kiosk-branch { font-size: 1.05rem; color: var(--muted); font-weight: 560; }
 .kiosk-clock { text-align: right; }
 .kiosk-time { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.03em; color: var(--primary); }
-.kiosk-offline { width: 100%; max-width: 920px; background: var(--danger); color: #fff; padding: .8rem 1rem; border-radius: var(--radius); font-weight: 650; text-align: center; animation: pop .25s var(--ease); }
-.kiosk-panel { width: 100%; max-width: 540px; background: var(--surface); border: 1px solid var(--border); border-radius: 26px; padding: 1.7rem; display: flex; flex-direction: column; gap: 1.1rem; align-items: stretch; text-align: center; box-shadow: var(--shadow-lg); animation: pop .35s var(--ease) both; }
+.kiosk-offline { width: 100%; max-width: 920px; background: var(--danger-solid); color: #fff; padding: .8rem 1rem; border-radius: var(--radius); font-weight: 650; text-align: center; animation: pop .25s var(--ease); }
+.kiosk-panel { margin-block: auto; width: 100%; max-width: 540px; background: var(--surface); border: 1px solid var(--border); border-radius: 26px; padding: 1.7rem; display: flex; flex-direction: column; gap: 1.1rem; align-items: stretch; text-align: center; box-shadow: var(--shadow-lg); animation: pop .35s var(--ease) both; }
 .kiosk-panel h1 { font-size: 1.85rem; margin: 0; }
 .kiosk-panel label { text-align: left; color: var(--muted); }
 .kiosk-input { font-size: 1.1rem; padding: .85rem; }
@@ -308,12 +310,14 @@ button.add { font-size: .9rem; margin-left: .25rem; padding: .15rem .5rem; }
 .kiosk-records { max-width: 720px; }
 .kiosk-done { border-color: var(--ok); }
 .kiosk-check { width: 96px; height: 96px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; font-size: 0; background: var(--ok-soft); position: relative; animation: pop .45s var(--ease); }
-.kiosk-check::after { content: ""; width: 34px; height: 56px; border: solid var(--ok); border-width: 0 8px 8px 0; transform: rotate(45deg) translate(-4px, -4px); border-radius: 2px; animation: pop .5s .15s var(--ease) both; }
+.kiosk-check::after { content: ""; width: 34px; height: 56px; border: solid var(--ok); border-width: 0 8px 8px 0; transform: rotate(45deg) translate(-4px, -4px); border-radius: 2px; animation: fade-in .4s .15s ease both; }
 .kiosk-footer { margin-top: auto; font-size: .8rem; }
 
 table button { padding: .35rem .75rem; font-size: .85rem; white-space: nowrap; }
 td.row { display: table-cell; }
 td.row button { margin: 0 .3rem .3rem 0; }
+td.row > a { display: inline-block; margin: 0 .7rem .3rem 0; padding: .35rem 0; }
+.split > :only-child { grid-column: 1 / -1; }
 
 /* ── Pestañas de sección, contexto y contenido ── */
 main { display: flex; flex-direction: column; }
@@ -389,6 +393,8 @@ table.week .who-cell { position: sticky; left: 0; background: var(--surface); fo
 .kiosk-date::first-letter { text-transform: uppercase; }
 .kiosk-hint { color: var(--muted); font-size: 1.05rem; margin: 0; }
 .keypad button.key-clear { color: var(--danger); font-size: 1.15rem; }
+
+@media (max-width: 420px) { .keypad { gap: .55rem; } .keypad button { min-height: 72px; font-size: 1.8rem; } .keypad button.primary, .keypad .key-secondary, .keypad button.key-clear { font-size: .95rem; padding-inline: .25rem; } .kiosk-panel { padding: 1.2rem; } }
 
 /* ── Móvil ── */
 @media (max-width: 900px) { .split, .account, .home-grid { grid-template-columns: 1fr; } .auth { grid-template-columns: 1fr; } .auth-hero { display: none; } }

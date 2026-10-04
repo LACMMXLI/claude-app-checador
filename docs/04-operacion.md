@@ -33,7 +33,7 @@ Variables de las pruebas (valores por defecto entre paréntesis): `TEST_PG_HOST`
      --param breakRequiredAfterMin=360 --param exitToleranceMin=5
    ```
    (`--param` se repite; acepta números, `true`/`false` y `null` para volver a heredar; valida rangos y niveles igual que el panel y queda auditado. También se puede hacer desde Panel → Políticas.)
-6. Cambiar la propia contraseña: cada persona, desde **Mi cuenta** (menú lateral, abajo). Restablecer una contraseña global ajena (mientras no exista recuperación por correo): `... run --rm platform reset-password --email persona@ejemplo.com --password '<nueva>'`.
+6. Cambiar la propia contraseña: cada persona, desde **Configuración → Mi cuenta** (también con el avatar de la esquina superior derecha). Restablecer una contraseña global ajena (mientras no exista recuperación por correo): `... run --rm platform reset-password --email persona@ejemplo.com --password '<nueva>'`.
 7. Suspender/reactivar un negocio: `... platform set-status --slug fatboy --status SUSPENDED|ACTIVE`.
 
 8. Dar de alta usuarios: desde el panel → **Usuarios → Invitar**. El enlace se muestra una sola vez; entrégalo a la persona (aún no se envían correos).
