@@ -81,7 +81,7 @@ export default function DashboardPage() {
   const nowMin = data && board0 ? minutesOnDay(data.at, tz0, opDate) : 0;
 
   return (
-    <>
+    <div className="home">
       <h1 className="sr-only">{t('dashboard.title')}</h1>
       <div className="hero">
         <div>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
       {canAttendance ? (data ? <Operational data={data} nowMin={nowMin} opDate={opDate} approver={approver} /> : <Loading />) : (
         <Card title={t('dashboard.business')} icon="building">{!business.data ? <Loading /> : <BusinessList data={business.data} />}</Card>
       )}
-    </>
+    </div>
   );
 }
 
@@ -282,7 +282,7 @@ function Attention({ items, tz, todayLocal, yLocal }: { items: { key: string; pe
 
 function Branches({ today, times, nowMin }: { today: Board[]; times: RowTimes[][]; nowMin: number }) {
   return (
-    <section className="panel-card" data-testid="branches-card">
+    <section className="panel-card branches-card" data-testid="branches-card">
       <header className="panel-head">
         <span className="panel-icon"><Glyph name="store" size={30} /></span>
         <div><h2>{t('dashboard.business')}</h2><p>{today.length} {today.length === 1 ? t('dashboard.branchActive') : t('dashboard.branchesActive')}</p></div>

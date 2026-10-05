@@ -572,3 +572,78 @@ a.kpi:hover { transform: translateY(-3px); text-decoration: none; box-shadow: 0 
   .kpi-value { font-size: 2.8rem; }
   .quick a { padding: .6rem 1.1rem; min-height: 46px; }
 }
+
+/* ── Inicio en escritorio: todo en una sola vista, sin scroll de página ──
+   Solo con pantalla ancha y de al menos 640px de alto; en móvil/tablet o pantallas bajitas se conserva el flujo normal.
+   El alto del Inicio es el de la ventana menos la barra superior; si hay muchas sucursales o alertas, scrollean
+   las listas internas, no la página. */
+@media (min-width: 1100px) and (min-height: 640px) {
+  main:has(> .home) { max-width: 1760px; padding: 1rem 1.6rem 1rem; }
+  .home { display: flex; flex-direction: column; height: calc(100dvh - 80px - 2rem); min-height: 0; }
+  .home .hero { flex: none; flex-wrap: nowrap; margin-bottom: .75rem; gap: .6rem 1rem; }
+  .home .greeting { font-size: clamp(1.6rem, 2.3vw, 2.15rem); white-space: nowrap; }
+  .home .hero-sub { margin-top: .15rem; font-size: .95rem; white-space: nowrap; }
+  .home .quick { gap: .5rem; flex-wrap: nowrap; }
+  .home .quick a { padding: .35rem .9rem; min-height: 38px; font-size: .9rem; gap: .4rem; white-space: nowrap; }
+  .home .kpis { flex: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; margin-bottom: .8rem; }
+  .home .kpi { min-height: clamp(100px, 14vh, 132px); gap: .3rem; padding: .75rem 1rem .7rem; border-radius: 16px; }
+  .home .kpi .kpi-mark { display: none; }
+  .home .kpi-head { gap: .75rem; }
+  .home .kpi-icon svg { width: 36px; height: 36px; }
+  .home .kpi-label { font-size: .92rem; line-height: 1.2; }
+  .home .kpi-value { font-size: clamp(2.1rem, 3.4vh, 2.6rem); }
+  .home .kpi-foot { gap: .5rem; }
+  .home .kpi-delta { font-size: .8rem; gap: .3rem; flex-wrap: nowrap; white-space: nowrap; }
+  .home .delta { font-size: .9rem; }
+  .home .kpi-chart { width: 38%; min-width: 64px; max-width: 120px; }
+  .home .spark { height: 32px; }
+  .home .home-grid { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: .8rem; align-items: stretch; }
+  .home .panel-card { padding: .85rem 1.05rem; border-radius: 16px; min-height: 0; }
+  .home .panel-head { gap: .5rem .8rem; margin-bottom: .65rem; flex: none; flex-wrap: nowrap; }
+  .home .panel-head h2 { font-size: 1.15rem; }
+  .home .panel-head p { font-size: .82rem; margin-top: 0; }
+  .home .panel-head > div { min-width: 0; }
+  .home .panel-icon { width: 42px; height: 42px; border-radius: 12px; }
+  .home .panel-icon svg { width: 22px; height: 22px; }
+  .home .pill-link { padding: .3rem .8rem; font-size: .82rem; }
+
+  .home .timeline-card { display: flex; flex-direction: column; }
+  .home .tl-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; padding-right: 1.2rem; }
+  .home .tl { --tl-name: 170px; min-width: 520px; flex: 1 0 auto; display: flex; flex-direction: column; padding-bottom: 2.6rem; }
+  .home .tl-axis { height: 22px; flex: none; }
+  .home .tl-axis span { font-size: .8rem; }
+  .home .tl-row { flex: 1 1 54px; max-height: 92px; min-height: 46px; margin-bottom: .4rem; }
+  .home .tl-name { padding: .4rem .75rem; gap: .6rem; border-radius: 12px 0 0 12px; }
+  .home .tl-name .dot { width: 16px; height: 16px; }
+  .home .tl-name strong { font-size: .95rem; } .home .tl-name span { font-size: .8rem; }
+  .home .tl-track { height: auto; border-radius: 0 12px 12px 0; }
+  .home .tl-bar { height: clamp(24px, 42%, 36px); border-radius: 9px; }
+  .home .ev { width: 13px; height: 13px; }
+  .home .tl-now-label { font-size: .8rem; } .home .tl-now-label b { font-size: .9rem; padding: .12rem .55rem; margin-bottom: .1rem; }
+  .home .tl-legend { flex: none; margin-top: .2rem; padding-top: .55rem; gap: .3rem 1.2rem; font-size: .82rem; }
+
+  .home .side-col { display: flex; flex-direction: column; gap: .8rem; min-height: 0; min-width: 0; }
+  .home .attention { flex: 1 1 0; min-height: 130px; display: flex; flex-direction: column; }
+  .home .attention .empty { margin: auto; padding: .3rem; gap: .4rem; }
+  .home .attention .empty-icon { width: 38px; height: 38px; } .home .attention .empty-icon svg { width: 20px; height: 20px; }
+  .home .att-list { gap: .45rem; overflow: auto; min-height: 0; flex: 1; padding: 2px; }
+  .home .att-item { padding: .5rem .75rem; gap: .2rem .65rem; border-radius: 12px; }
+  .home .att-who strong { font-size: .94rem; } .home .att-who span { font-size: .8rem; }
+  .home .att-tag { padding: .15rem .6rem; font-size: .78rem; } .home .att-when { font-size: .8rem; }
+  .home .att-more { margin: .4rem 0 0; font-size: .8rem; flex: none; }
+  .home .branches-card { flex: 0 1 auto; max-height: 55%; display: flex; flex-direction: column; }
+  .home .branches-card .panel-head p { white-space: nowrap; }
+  .home .branch-cards { grid-template-columns: minmax(0, 1fr); gap: .45rem; overflow: auto; min-height: 0; padding: 2px; }
+  .home .branch-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .3rem .8rem; padding: .5rem .8rem; border-radius: 12px; }
+  .home .bc-head { gap: .55rem; min-width: 0; } .home .bc-head svg { width: 22px; height: 22px; flex: none; }
+  .home .bc-head strong { font-size: .92rem; } .home .bc-head span { font-size: .78rem; }
+  .home .bc-count { margin: 0; font-size: .82rem; white-space: nowrap; } .home .bc-count b { font-size: 1rem; }
+  .home .branch-card .bar { grid-column: 1 / -1; height: 6px; }
+}
+@media (min-width: 1100px) and (max-width: 1399px) and (min-height: 640px) { .home .branches-card .panel-head p { display: none; } }
+@media (min-width: 1100px) and (min-height: 640px) and (max-height: 799px) {
+  .home .bc-head span { display: none; }
+  .home .branch-card { padding: .4rem .7rem; gap: .25rem .8rem; }
+  .home .branch-cards { gap: .35rem; }
+  .home .branches-card .panel-head { margin-bottom: .5rem; }
+}
