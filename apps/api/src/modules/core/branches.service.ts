@@ -5,9 +5,18 @@ import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { TenantDb } from '../../common/tenancy/tenant-db.js';
 import { branches, organizations } from '../../db/schema/index.js';
 import type { AuditService } from '../audit/audit.service.js';
+import { type Branding, publicBranding } from '../organizations/branding.js';
 import { refreshFutureShiftOperationalDates } from '../scheduling/operational-dates.js';
 
 export class BranchesService {
+  /** Imágenes de marca del negocio de la sesión (logo y arte del menú), ya saneadas. */
+  async branding(ctx: TenantContext): Promise<Branding> {
+    return this.tenantDb.runReadOnly(ctx, async (tx) => {
+      const [row] = await tx.select({ branding: organizations.branding }).from(organizations);
+      return publicBranding(row?.branding);
+    });
+  }
+
   constructor(
     private readonly tenantDb: TenantDb,
     private readonly audit: AuditService,

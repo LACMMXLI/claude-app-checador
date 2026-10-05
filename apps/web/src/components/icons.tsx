@@ -57,3 +57,58 @@ export function Icon({ name, size = 20, ...rest }: { name: IconName; size?: numb
     </svg>
   );
 }
+
+/**
+ * Pictogramas rellenos del menú y del tablero (mismo estilo que el diseño de Inicio). Decorativos: el texto de al lado es el
+ * nombre accesible. Se dibujan en 24×24 con `currentColor`.
+ */
+const GLYPHS = {
+  home: <path d="M12 2.8 2.6 10.4a1 1 0 0 0-.4.8V20a1.2 1.2 0 0 0 1.2 1.2H8.6v-6.1h6.8v6.1h5.2A1.2 1.2 0 0 0 21.8 20v-8.8a1 1 0 0 0-.4-.8z" />,
+  calendar: <path fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" d="M8 2.8v3.4m8-3.4v3.4M3.8 9.6h16.4M6 4.6h12a2.2 2.2 0 0 1 2.2 2.2v11.4A2.2 2.2 0 0 1 18 20.4H6a2.2 2.2 0 0 1-2.2-2.2V6.8A2.2 2.2 0 0 1 6 4.6z" />,
+  store: <path fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" d="M3.2 9.3 4.6 4.2h14.8l1.4 5.1M3.2 9.3v.9a2.9 2.9 0 0 0 5.9 0 2.9 2.9 0 0 0 5.8 0 2.9 2.9 0 0 0 5.9 0v-.9M5 13.1v7.3h14v-7.3M10 20.4v-4.9h4v4.9" />,
+  users: (
+    <>
+      <circle cx="12" cy="7.6" r="3.3" />
+      <path d="M5.4 19.6c0-3.4 2.9-5.6 6.6-5.6s6.6 2.2 6.6 5.6v.9H5.4z" />
+      <circle cx="4.9" cy="9.4" r="2.3" />
+      <path d="M1.2 18.3c0-2.4 1.7-4 3.9-4 .6 0 1.2.1 1.7.3-1.1 1-1.8 2.4-1.8 4.1v.8H1.2z" />
+      <circle cx="19.1" cy="9.4" r="2.3" />
+      <path d="M22.8 18.3c0-2.4-1.7-4-3.9-4-.6 0-1.2.1-1.7.3 1.1 1 1.8 2.4 1.8 4.1v.8h3.8z" />
+    </>
+  ),
+  chart: (
+    <>
+      <rect x="3.6" y="10.4" width="4.4" height="10" rx="1.1" />
+      <rect x="9.8" y="3.6" width="4.4" height="16.8" rx="1.1" />
+      <rect x="16" y="7.6" width="4.4" height="12.8" rx="1.1" />
+    </>
+  ),
+  cog: <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6S10.02 8.4 12 8.4s3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" strokeWidth="2.4" />
+      <path d="M12 6.6v5.8l3.7 2.2" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  alert: <path fillRule="evenodd" d="M12 2.4 1.6 20.6h20.8zM11 9.2h2v5.6h-2zm0 7.4h2v2h-2z" />,
+  document: <path fillRule="evenodd" d="M6 2h8l5.2 5.2V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.6V8h4.4zM7.6 12.2h8.8v1.7H7.6zm0 3.6h8.8v1.7H7.6zm0-7.2h3.4v1.7H7.6z" />,
+  bell: <path d="M12 2.8a6.2 6.2 0 0 0-6.2 6.2c0 4.3-1.9 6-2.8 6.9v.9h18v-.9c-.9-.9-2.8-2.6-2.8-6.9A6.2 6.2 0 0 0 12 2.8zm-2.4 15.7a2.5 2.5 0 0 0 4.8 0z" />,
+  chevronRight: <path fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" d="m9 5.5 6.5 6.5L9 18.5" />,
+  chevronDown: <path fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" d="m5.5 9 6.5 6.5L18.5 9" />,
+  arrowRight: <path fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m-6-6 6 6-6 6" />,
+  trendUp: <path fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" d="M6 17.5 17.5 6M8.5 6H17.5v9" />,
+  trendDown: <path fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" d="M6 6.5 17.5 18M8.5 18H17.5V9" />,
+  logout: <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M9.5 20.5h-4a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h4m6.5 12.5 5-5-5-5m5 5H9.5" />,
+  user: <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M20 21v-1.6a4.2 4.2 0 0 0-4.2-4.2H8.2A4.2 4.2 0 0 0 4 19.4V21M12 11.4a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />,
+  swap: <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M17 1.5 21 5.5l-4 4M3 11V9.5a4 4 0 0 1 4-4h14M7 22.5l-4-4 4-4m14 4V17a4 4 0 0 0-4-4H3" />,
+} as const;
+
+export type GlyphName = keyof typeof GLYPHS;
+
+export function Glyph({ name, size = 22, className, ...rest }: { name: GlyphName; size?: number; className?: string } & Omit<SVGProps<SVGSVGElement>, 'name'>) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" className={`glyph ${className ?? ''}`} {...rest}>
+      {GLYPHS[name]}
+    </svg>
+  );
+}

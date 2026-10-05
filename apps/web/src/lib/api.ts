@@ -37,7 +37,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
 export interface Me {
   user: { id: string; email: string; displayName: string };
   memberships: { organizationId: string; name: string; slug: string }[];
-  activeOrganization: { id: string; name: string } | null;
+  activeOrganization: { id: string; name: string; branding: { logoUrl?: string; artUrl?: string } } | null;
   permissions: Record<string, 'ALL' | string[]>;
   /** Ficha de empleado ligada a la membresía activa (habilita "Mis jornadas"). */
   employeeId: string | null;

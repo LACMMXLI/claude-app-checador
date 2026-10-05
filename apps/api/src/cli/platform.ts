@@ -11,6 +11,7 @@ const USAGE = `Uso:
       [--plan BASIC|ADVANCED] [--trial-days 14]       (sin --plan: ADVANCED activo, sin vencimiento)
   platform set-status --slug fatboy --status SUSPENDED|ACTIVE
   platform reset-password --email persona@ejemplo.com --password '<nueva>'
+  platform set-branding --slug fatboy --logo-url /brand/fatboy-logo.png --art-url /brand/fatboy-art.png   (null quita la imagen)
   platform set-policy --slug fatboy --param breakRequiredAfterMin=360 --param exitToleranceMin=5
 Variables: PLATFORM_DATABASE_URL (rol platform_ops).`;
 
@@ -32,6 +33,8 @@ const { values } = parseArgs({
     email: { type: 'string' },
     password: { type: 'string' },
     param: { type: 'string', multiple: true },
+    'logo-url': { type: 'string' },
+    'art-url': { type: 'string' },
   },
 });
 
@@ -61,6 +64,10 @@ try {
   } else if (command === 'reset-password') {
     await admin.resetPassword(values.email ?? '', values.password ?? '');
     console.log('Contraseña global restablecida.');
+  } else if (command === 'set-branding') {
+    const val = (v: string | undefined) => (v === undefined ? undefined : v === 'null' ? null : v);
+    await admin.setOrganizationBranding(values.slug ?? '', { logoUrl: val(values['logo-url']), artUrl: val(values['art-url']) });
+    console.log('Imágenes de marca actualizadas.');
   } else if (command === 'set-policy') {
     const layer = Object.fromEntries(
       (values.param ?? []).map((pair) => {

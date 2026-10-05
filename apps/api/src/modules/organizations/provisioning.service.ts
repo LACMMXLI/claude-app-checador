@@ -20,6 +20,7 @@ import {
   subscriptions,
 } from '../../db/schema/index.js';
 import { hashPassword } from '../auth/password.js';
+import { brandingSchema } from './branding.js';
 import { type PolicyLayer, validateOverride } from '../policies/policy.js';
 import { refreshFutureShiftOperationalDates } from '../scheduling/operational-dates.js';
 
@@ -231,6 +232,30 @@ export class PlatformAdminService {
       // D-78: la nueva hora de corte aplica a los turnos que aún no empiezan
       if ('operationalCutoff' in clean) await refreshFutureShiftOperationalDates(tx, org.id, new Date());
     });
+  }
+
+  /** Imágenes de marca del negocio (logo y arte del menú). `null` quita una imagen. Nada de esto vive en el código ni en migraciones (RN-ORG-09). */
+  async setOrganizationBranding(slug: string, values: { logoUrl?: string | null; artUrl?: string | null }, actor = 'platform-cli'): Promise<void> {
+    const patch: Record<string, string | null> = {};
+    for (const key of ['logoUrl', 'artUrl'] as const) {
+      const v = values[key];
+      if (v === undefined) continue;
+      if (v !== null && !brandingSchema.shape[key].safeParse(v).success) throw new DomainError('VALIDATION_ERROR', { fields: [key] });
+      patch[key] = v;
+    }
+    if (Object.keys(patch).length === 0) throw new DomainError('VALIDATION_ERROR', { fields: ['logoUrl', 'artUrl'] });
+    await this.platformDb.run(async (tx) => {
+      const [org] = await tx.select().from(organizations).where(eq(organizations.slug, slug));
+      if (!org) throw new DomainError('ORGANIZATION_NOT_FOUND');
+      const next: Record<string, unknown> = { ...(org.branding as Record<string, unknown>) };
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === null) delete next[k];
+        else next[k] = v;
+      }
+      await tx.update(organizations).set({ branding: next }).where(eq(organizations.id, org.id));
+      await tx.insert(auditLog).values({ organizationId: org.id, actorType: 'SYSTEM', action: 'organization.branding_set', entityType: 'organization', entityId: org.id, before: org.branding, after: next, reason: `Cambio por ${actor}` });
+      await tx.insert(platformAuditLog).values({ actor, action: 'organization.branding_set', organizationId: org.id, details: patch });
+    }, { actor });
   }
 
   /** Restablecimiento GLOBAL de contraseña (solo plataforma, mientras no exista recuperación por correo). */

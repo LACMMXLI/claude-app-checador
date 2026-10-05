@@ -16,6 +16,9 @@ test('panel: login → sucursal → empleado (PIN una vez) → kiosco (token una
     await expect(page.getByTestId('kpis')).toBeVisible();
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/inicio.png`, fullPage: true });
+    await page.setViewportSize({ width: 1672, height: 941 });
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/inicio-1672.png` });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${process.env.E2E_SCREENSHOTS}/inicio-movil.png`, fullPage: true });

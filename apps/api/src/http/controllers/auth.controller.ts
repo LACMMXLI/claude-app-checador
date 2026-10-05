@@ -41,17 +41,19 @@ export class AuthController {
     const memberships = await this.c.gate.listUserMemberships(session.userId);
     let permissions: Record<string, 'ALL' | string[]> = {};
     let employeeId: string | null = null;
+    let branding = {};
     if (session.organizationId && session.membershipId) {
       const ctx = SessionsService.tenantContext(session);
       const access = await this.c.rbac.loadAccess(ctx, session.membershipId);
       permissions = access.summary();
       employeeId = access.employeeId; // ficha ligada a la membresía: habilita "Mis jornadas" (decisión 1)
+      branding = await this.c.branches.branding(ctx);
     }
     return {
       user: { id: session.userId, email: session.email, displayName: session.displayName },
       memberships: memberships.map((m) => ({ organizationId: m.organizationId, name: m.organizationName, slug: m.organizationSlug })),
       activeOrganization: memberships.find((m) => m.organizationId === session.organizationId)
-        ? { id: session.organizationId, name: memberships.find((m) => m.organizationId === session.organizationId)!.organizationName }
+        ? { id: session.organizationId, name: memberships.find((m) => m.organizationId === session.organizationId)!.organizationName, branding }
         : null,
       permissions,
       employeeId,
