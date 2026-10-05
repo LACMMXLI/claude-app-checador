@@ -9,6 +9,8 @@ import { CONTAINER } from '../tokens.js';
 import { parse } from '../validation.js';
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const restDays = z.array(z.number().int().min(1).max(7)).max(6);
+const birthDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => { const d = new Date(`${v}T00:00:00Z`); return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v; }, 'fecha inexistente');
 const createSchema = z.object({
   employeeNumber: z.string().trim().min(1).max(40),
   firstName: z.string().trim().min(1).max(80),
@@ -16,6 +18,8 @@ const createSchema = z.object({
   phone: z.string().trim().max(40).optional(),
   primaryBranchId: z.string().uuid(),
   hiredAt: date.optional(),
+  restDays: restDays.optional(),
+  birthDate: birthDate.nullish(),
 });
 const updateSchema = z.object({
   employeeNumber: z.string().trim().min(1).max(40).optional(),
@@ -23,6 +27,8 @@ const updateSchema = z.object({
   lastName: z.string().trim().max(80).optional(),
   phone: z.string().trim().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
+  restDays: restDays.optional(),
+  birthDate: birthDate.nullable().optional(),
   reason: z.string().max(500).optional(),
 });
 const reasonSchema = z.object({ reason: z.string().trim().min(1).max(500) });

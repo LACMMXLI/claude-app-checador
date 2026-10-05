@@ -2,7 +2,7 @@ import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'dr
 import { DomainError, isPgError, raisedCode } from '../../common/errors.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
-import { effectiveTimezone } from '../../common/time.js';
+import { ageOn, effectiveTimezone, localDate } from '../../common/time.js';
 import { operationalDateIn } from '../../common/operational-day.js';
 import { addDaysToDate, type Fold, weekStartOf } from '../../common/zoned-time.js';
 import { branches, employeeBranchAssignments, employees, organizations, shifts, weeklySchedules } from '../../db/schema/index.js';
@@ -237,7 +237,7 @@ export class SchedulingService {
       const ids = [...new Set([...assigned.map((a) => a.employeeId), ...rows.map((r) => r.employeeId)])];
       const people = ids.length
         ? await tx
-            .select({ id: employees.id, employeeNumber: employees.employeeNumber, firstName: employees.firstName, lastName: employees.lastName, status: employees.status })
+            .select({ id: employees.id, employeeNumber: employees.employeeNumber, firstName: employees.firstName, lastName: employees.lastName, status: employees.status, restDays: employees.restDays, birthDate: employees.birthDate })
             .from(employees)
             .where(inArray(employees.id, ids))
             .orderBy(asc(employees.firstName), asc(employees.lastName))
@@ -249,7 +249,7 @@ export class SchedulingService {
         schedule: schedule ? { id: schedule.id, status: schedule.status, version: schedule.version, publishedAt: schedule.publishedAt } : null,
         employees: people
           .filter((p) => p.status === 'ACTIVE' || rows.some((r) => r.employeeId === p.id))
-          .map((p) => ({ ...p, temporary: !assigned.some((a) => a.employeeId === p.id && a.kind === 'PRIMARY') && assigned.some((a) => a.employeeId === p.id) })),
+          .map(({ birthDate, ...p }) => ({ ...p, age: ageOn(birthDate, localDate(this.clock(), 'UTC')), temporary: !assigned.some((a) => a.employeeId === p.id && a.kind === 'PRIMARY') && assigned.some((a) => a.employeeId === p.id) })),
         shifts: rows.map((r) => shiftView(r, schedule?.status)),
       };
     });

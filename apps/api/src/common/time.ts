@@ -24,3 +24,18 @@ export function addDays(isoDate: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/** Día de la semana ISO de una fecha `YYYY-MM-DD`: 1 = lunes … 7 = domingo. */
+export function isoWeekday(isoDate: string): number {
+  const d = new Date(`${isoDate}T00:00:00Z`).getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
+/** Edad cumplida en años en `today` (`YYYY-MM-DD`); `null` si no hay fecha de nacimiento. */
+export function ageOn(birthDate: string | null | undefined, today: string): number | null {
+  if (!birthDate) return null;
+  const [by, bm, bd] = birthDate.split('-').map(Number) as [number, number, number];
+  const [ty, tm, td] = today.split('-').map(Number) as [number, number, number];
+  const years = ty - by - (tm < bm || (tm === bm && td < bd) ? 1 : 0);
+  return years < 0 ? null : years;
+}

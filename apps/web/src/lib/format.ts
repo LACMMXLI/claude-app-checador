@@ -58,3 +58,9 @@ export function signedMinutes(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—';
   return n > 0 ? `+${n} min` : n < 0 ? `−${Math.abs(n)} min` : '0 min';
 }
+
+/** Día de la semana ISO de una fecha `YYYY-MM-DD`: 1 = lunes … 7 = domingo. */
+export function isoWeekday(date: string): number {
+  const d = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return d === 0 ? 7 : d;
+}

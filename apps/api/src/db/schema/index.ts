@@ -192,6 +192,9 @@ export const employees = core.table('employees', {
   hiredAt: date('hired_at', { mode: 'string' }),
   terminatedAt: date('terminated_at', { mode: 'string' }),
   terminationReason: text('termination_reason'),
+  /** D-92: días de descanso semanales (ISO: 1 = lunes … 7 = domingo). Guía de planeación. */
+  restDays: smallint('rest_days').array().notNull().default([]),
+  birthDate: date('birth_date', { mode: 'string' }),
   pinHash: text('pin_hash'),
   pinSetAt: tstz('pin_set_at'),
   createdAt: tstz('created_at').notNull().defaultNow(),

@@ -60,7 +60,7 @@ export class ErrorsFilter implements ExceptionFilter {
     if (isPgError(exception, '42501')) return void res.status(403).json({ error: { code: 'FORBIDDEN', details: {} } });
     if (isPgError(exception, '23503')) return void res.status(400).json({ error: { code: 'INVALID_REFERENCE', details: {} } });
     if (isPgError(exception, '23505')) return void res.status(409).json({ error: { code: 'DUPLICATE', details: {} } });
-    if (isPgError(exception, '23514') || isPgError(exception, '22023') || isPgError(exception, '22P02')) {
+    if (isPgError(exception, '23514') || isPgError(exception, '22008') || isPgError(exception, '22023') || isPgError(exception, '22P02')) {
       return void res.status(400).json({ error: { code: 'VALIDATION_ERROR', details: {} } });
     }
     this.logger.error(exception instanceof Error ? exception.stack : String(exception));

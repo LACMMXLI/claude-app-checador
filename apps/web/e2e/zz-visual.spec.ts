@@ -21,6 +21,7 @@ const SCHEMES = ['light', 'dark'] as const;
 const PAGES: { slug: string; path: string; open?: string }[] = [
   { slug: 'inicio', path: '/' },
   { slug: 'asistencia', path: '/asistencia' },
+  { slug: 'descansos', path: '/descansos' },
   { slug: 'jornadas', path: '/jornadas' },
   { slug: 'incidencias', path: '/incidencias' },
   { slug: 'solicitudes', path: '/solicitudes' },
@@ -253,7 +254,7 @@ if (process.env.E2E_VISUAL) {
         // PIN inválido
         for (const d of '000000'.slice(0, 6 - 2)) await kiosk.getByRole('button', { name: d, exact: true }).click(); // ya hay 2 dígitos
         await kiosk.getByRole('button', { name: 'Confirmar' }).click();
-        await expect(kiosk.getByRole('alert')).toBeVisible();
+        await expect(kiosk.locator('p[role=alert]')).toBeVisible();
         await snap('pin-invalido');
 
         // verificando: la respuesta se retrasa

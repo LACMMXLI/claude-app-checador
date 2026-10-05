@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { AttendanceHistory } from '@/components/attendance';
+import { RestDaysPicker } from '@/components/rest-days';
 import { Card, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee, type Shift } from '@/lib/api';
 import { dayLabel, minutesLabel, shiftLabel } from '@/lib/format';
@@ -20,18 +21,22 @@ export default function EmployeeDetailPage() {
   const branches = useLoad(() => api<Branch[]>('/branches'));
   const upcoming = useLoad(() => (can('schedules.view') ? api<Shift[]>(`/employees/${id}/shifts`) : Promise.resolve([] as Shift[])), [id]);
   const action = useAction();
-  const [edit, setEdit] = useState({ firstName: '', lastName: '', phone: '' });
+  const [edit, setEdit] = useState({ firstName: '', lastName: '', phone: '', birthDate: '' });
+  const [restDays, setRestDays] = useState<number[]>([]);
   const [assign, setAssign] = useState({ branchId: '', kind: 'TEMPORARY' as 'PRIMARY' | 'TEMPORARY', validFrom: '', validTo: '', reason: '' });
   const [secret, setSecret] = useState<string | null>(null);
   const branchName = (b: string) => branches.data?.find((x) => x.id === b)?.name ?? b.slice(0, 8);
 
   useEffect(() => {
-    if (data) setEdit({ firstName: data.firstName, lastName: data.lastName, phone: data.phone ?? '' });
+    if (data) {
+      setEdit({ firstName: data.firstName, lastName: data.lastName, phone: data.phone ?? '', birthDate: data.birthDate ?? '' });
+      setRestDays(data.restDays);
+    }
   }, [data]);
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    if (await action.run(() => api(`/employees/${id}`, { method: 'PATCH', body: { ...edit, phone: edit.phone || null } }))) await reload();
+    if (await action.run(() => api(`/employees/${id}`, { method: 'PATCH', body: { ...edit, phone: edit.phone || null, birthDate: edit.birthDate || null, restDays } }))) await reload();
   }
   async function resetPin() {
     const reason = window.prompt(t('common.reason')) ?? undefined;
@@ -73,6 +78,10 @@ export default function EmployeeDetailPage() {
           <Field label={t('employees.firstName')}><input disabled={!manage} value={edit.firstName} onChange={(e) => setEdit({ ...edit, firstName: e.target.value })} /></Field>
           <Field label={t('employees.lastName')}><input disabled={!manage} value={edit.lastName} onChange={(e) => setEdit({ ...edit, lastName: e.target.value })} /></Field>
           <Field label={t('employees.phone')}><input disabled={!manage} value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
+          <Field label={`${t('employees.birthDate')}${data.age !== null ? ` · ${data.age} ${t('employees.ageYears')}` : ''}`}>
+            <input type="date" disabled={!manage} value={edit.birthDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} />
+          </Field>
+          <RestDaysPicker value={restDays} onChange={setRestDays} disabled={!manage} />
           {manage && <button className="primary" disabled={action.busy}>{t('common.save')}</button>}
         </form>
       </Card>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ShiftDialog } from '@/components/shift-dialog';
 import { Card, ErrorBox, Field, Loading, useAction } from '@/components/ui';
 import { api, type Branch, type Shift, type Week } from '@/lib/api';
-import { addDays, dayLabel, shiftLabel, todayLocal } from '@/lib/format';
+import { addDays, dayLabel, isoWeekday, shiftLabel, todayLocal } from '@/lib/format';
 import { errorText, t } from '@/lib/i18n';
 
 interface CopyResult {
@@ -138,13 +138,13 @@ export default function SchedulePage() {
                   {week.days.map((d) => {
                     const cell = week.shifts.filter((s) => s.employeeId === p.id && s.businessDate === d);
                     return (
-                      <td key={d} data-label={dayLabel(d)} className={cell.length === 0 ? 'rest-cell' : ''}>
+                      <td key={d} data-label={dayLabel(d)} className={cell.length === 0 && p.restDays.includes(isoWeekday(d)) ? 'rest-cell' : ''}>
                         {cell.map((s) => (
                           <button key={s.id} className={`shift ${s.status === 'CANCELLED' ? 'cancelled' : ''}`} onClick={() => setDialog({ shift: s })} title={`${s.startDate} ${s.startTime} → ${s.endDate} ${s.endTime}`}>
                             {shiftLabel(s)}
                           </button>
                         ))}
-                        {cell.length === 0 && <span className="muted rest">{t('schedule.rest')}</span>}
+                        {cell.length === 0 && <span className="muted rest">{p.restDays.includes(isoWeekday(d)) ? t('schedule.rest') : t('schedule.noShift')}</span>}
                         <button className="link add" aria-label={`${t('schedule.newShift')} ${p.firstName} ${d}`} onClick={() => setDialog({ shift: null, preset: { employeeId: p.id, date: d } })}>＋</button>
                       </td>
                     );

@@ -17,6 +17,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: '/incidencias', label: 'nav.incidents', permission: 'attendance.view' },
       { href: '/solicitudes', label: 'nav.requests', permission: 'attendance.view' },
       { href: '/horario', label: 'nav.scheduleShort', permission: 'schedules.view' },
+      { href: '/descansos', label: 'nav.restDays', permission: 'schedules.view' },
       { href: '/plantillas', label: 'nav.templates', permission: 'schedules.templates.manage' },
     ],
   },

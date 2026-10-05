@@ -647,3 +647,27 @@ a.kpi:hover { transform: translateY(-3px); text-decoration: none; box-shadow: 0 
   .home .branch-cards { gap: .35rem; }
   .home .branches-card .panel-head { margin-bottom: .5rem; }
 }
+
+/* ── Días de descanso (D-92) ── */
+.rest-picker { border: 0; padding: 0; margin: 0; min-width: 0; }
+.rest-picker legend { padding: 0; margin-bottom: .35rem; font-size: .85rem; font-weight: 650; color: var(--muted); }
+.rest-picker .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rest-picker .chip { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 3rem; padding: .4rem .7rem; border-radius: 999px; border: 1px solid var(--border-strong); background: rgb(13 33 71 / .6); color: var(--text); font-weight: 600; font-size: .9rem; cursor: pointer; user-select: none; }
+.rest-picker .chip input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.rest-picker .chip.on { background: var(--accent); border-color: rgb(140 180 255 / .6); color: #fff; }
+.rest-picker .chip:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.rest-picker .hint, .hint { font-size: .82rem; margin: .5rem 0 0; }
+table.rest-table th.is-today { color: #fff; box-shadow: inset 0 -3px 0 var(--primary); }
+table.rest-table td.is-today { background: rgb(31 99 255 / .08); }
+.rest-pill { display: inline-block; padding: .2rem .55rem; border-radius: 9px; font-size: .84rem; font-weight: 600; }
+.rest-pill.work { background: var(--primary-soft); color: var(--text); }
+.rest-pill.rest { background: var(--warn-soft); color: var(--warn); }
+td.rest-conflict .rest-pill.work { box-shadow: inset 0 0 0 1px var(--warn); }
+table.rest-table tfoot th { text-align: left; font-weight: 700; }
+table.rest-table tfoot td { font-weight: 750; font-variant-numeric: tabular-nums; }
+table.rest-table tfoot tr.work td { color: var(--ok); } table.rest-table tfoot tr.rest td { color: var(--warn); } table.rest-table tfoot tr.off td { color: var(--muted); }
+@media (max-width: 760px) {
+  table.rest-table tfoot { display: block; width: 100%; }
+  table.rest-table tfoot th { display: block; padding: .5rem .7rem; }
+  table.rest-table tfoot tr { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: .6rem; }
+}

@@ -336,3 +336,8 @@ Todas son tablas **del plano de plataforma**: sin acceso para `app_user` y regis
 
 Triggers de límites del plan (`core.enforce_plan_limit`) en `core.branches`, `core.employees`, `core.kiosk_devices` y `core.organization_memberships`: solo para el tráfico de `app_user`, cuentan registros activos.
 
+
+## Descansos y fecha de nacimiento (migración 0014, D-92)
+
+`core.employees` suma `rest_days smallint[] NOT NULL DEFAULT '{}'` (días ISO 1–7, sin repetidos, máximo 6; `CHECK core.rest_days_valid`) y
+`birth_date date NULL` (trigger `core.check_employee_birth_date`: no futura ni anterior a 1900). La edad se calcula en la API; no se guarda.

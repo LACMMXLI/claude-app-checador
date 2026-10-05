@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { type FormEvent, useState } from 'react';
+import { RestDaysPicker, restDaysLabel } from '@/components/rest-days';
 import { Card, Disclosure, Empty, ErrorBox, Field, Loading, OneTimeSecret, Status, useAction, useLoad } from '@/components/ui';
 import { api, type Branch, type Employee } from '@/lib/api';
 import { t } from '@/lib/i18n';
@@ -13,16 +14,18 @@ export default function EmployeesPage() {
   const { data, error, reload } = useLoad(() => api<Employee[]>(`/employees${status ? `?status=${status}` : ''}`), [status]);
   const branches = useLoad(() => api<Branch[]>('/branches'));
   const action = useAction();
-  const [form, setForm] = useState({ employeeNumber: '', firstName: '', lastName: '', phone: '', primaryBranchId: '' });
+  const [form, setForm] = useState({ employeeNumber: '', firstName: '', lastName: '', phone: '', primaryBranchId: '', birthDate: '' });
+  const [restDays, setRestDays] = useState<number[]>([]);
   const [secret, setSecret] = useState<string | null>(null);
   const branchName = (id: string) => branches.data?.find((b) => b.id === id)?.name ?? '—';
 
   async function create(e: FormEvent) {
     e.preventDefault();
-    const res = await action.run(() => api<{ pin: string }>('/employees', { method: 'POST', body: { ...form, phone: form.phone || undefined } }));
+    const res = await action.run(() => api<{ pin: string }>('/employees', { method: 'POST', body: { ...form, phone: form.phone || undefined, birthDate: form.birthDate || undefined, restDays } }));
     if (res) {
       setSecret(res.pin);
-      setForm({ employeeNumber: '', firstName: '', lastName: '', phone: '', primaryBranchId: form.primaryBranchId });
+      setForm({ employeeNumber: '', firstName: '', lastName: '', phone: '', primaryBranchId: form.primaryBranchId, birthDate: '' });
+      setRestDays([]);
       await reload();
     }
   }
@@ -45,6 +48,8 @@ export default function EmployeesPage() {
                 {branches.data?.filter((b) => b.isActive).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </Field>
+            <Field label={t('employees.birthDate')}><input type="date" value={form.birthDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
+            <RestDaysPicker value={restDays} onChange={setRestDays} />
             <button className="primary" disabled={action.busy}>{t('common.create')}</button>
           </form>
         </Disclosure>
@@ -58,12 +63,14 @@ export default function EmployeesPage() {
       }>
         {!data ? <Loading /> : data.length === 0 ? <Empty /> : (
           <table>
-            <thead><tr><th>{t('employees.number')}</th><th>{t('common.name')}</th><th>{t('employees.primaryBranch')}</th><th>{t('employees.branches')}</th><th>{t('common.status')}</th></tr></thead>
+            <thead><tr><th>{t('employees.number')}</th><th>{t('common.name')}</th><th>{t('employees.age')}</th><th>{t('employees.restDays')}</th><th>{t('employees.primaryBranch')}</th><th>{t('employees.branches')}</th><th>{t('common.status')}</th></tr></thead>
             <tbody>
               {data.map((e) => (
                 <tr key={e.id}>
                   <td>{e.employeeNumber}</td>
                   <td><Link href={`/empleados/${e.id}`}>{e.firstName} {e.lastName}</Link></td>
+                  <td>{e.age ?? '—'}</td>
+                  <td>{restDaysLabel(e.restDays)}</td>
                   <td>{e.primaryBranchId ? branchName(e.primaryBranchId) : '—'}</td>
                   <td>{e.branchIds.map(branchName).join(', ')}</td>
                   <td><Status active={e.status === 'ACTIVE'} /></td>

@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 import { DomainError, isPgError } from '../../common/errors.js';
-import { addDays, effectiveTimezone, localDate } from '../../common/time.js';
+import { addDays, ageOn, effectiveTimezone, localDate } from '../../common/time.js';
 import type { TenantContext } from '../../common/tenancy/tenant-context.js';
 import type { Tx, TenantDb } from '../../common/tenancy/tenant-db.js';
 import { branches, employeeBranchAssignments, employees, organizations } from '../../db/schema/index.js';
@@ -22,6 +22,11 @@ const toView = (e: Employee): EmployeeView => {
   const { pinHash: _omit, ...rest } = e;
   return rest;
 };
+
+/** Días de descanso: ordenados y sin repetidos (PostgreSQL vuelve a validar rango y que no sean los 7). */
+export function normalizeRestDays(days: readonly number[] | undefined): number[] {
+  return [...new Set(days ?? [])].sort((a, b) => a - b);
+}
 
 export class EmployeesService {
   private readonly pinGenerator: () => string;
@@ -80,6 +85,8 @@ export class EmployeesService {
       phone?: string;
       primaryBranchId: string;
       hiredAt?: string;
+      restDays?: number[];
+      birthDate?: string | null;
     },
   ): Promise<{ employee: EmployeeView; pin: string }> {
     return this.tenantDb.run(ctx, async (tx) => {
@@ -95,6 +102,8 @@ export class EmployeesService {
             lastName: input.lastName ?? '',
             phone: input.phone ?? null,
             hiredAt: input.hiredAt ?? today,
+            restDays: normalizeRestDays(input.restDays),
+            birthDate: input.birthDate ?? null,
           })
           .returning()) as [Employee];
       } catch (error) {
@@ -131,14 +140,15 @@ export class EmployeesService {
   async update(
     ctx: TenantContext,
     employeeId: string,
-    patch: { firstName?: string; lastName?: string; phone?: string | null; notes?: string | null; employeeNumber?: string },
+    patch: { firstName?: string; lastName?: string; phone?: string | null; notes?: string | null; employeeNumber?: string; restDays?: number[]; birthDate?: string | null },
     reason?: string,
   ): Promise<EmployeeView> {
     return this.tenantDb.run(ctx, async (tx) => {
       const [before] = await tx.select().from(employees).where(eq(employees.id, employeeId));
       if (!before) throw new DomainError('EMPLOYEE_NOT_FOUND');
       try {
-        const [after] = await tx.update(employees).set(patch).where(eq(employees.id, employeeId)).returning();
+        const { restDays, ...rest } = patch;
+        const [after] = await tx.update(employees).set({ ...rest, ...(restDays !== undefined ? { restDays: normalizeRestDays(restDays) } : {}) }).where(eq(employees.id, employeeId)).returning();
         await this.audit.record(tx, ctx, {
           action: 'employee.updated',
           entityType: 'employee',
@@ -331,6 +341,7 @@ export class EmployeesService {
         .from(employees)
         .where(filter.status ? eq(employees.status, filter.status) : undefined)
         .orderBy(asc(employees.lastName), asc(employees.firstName));
+      const today = localDate(this.clock(), 'UTC');
       const assignments = await this.currentAssignments(tx, all.map((e) => e.id));
       const byEmployee = new Map<string, typeof assignments>();
       for (const a of assignments) byEmployee.set(a.employeeId, [...(byEmployee.get(a.employeeId) ?? []), a]);
@@ -339,6 +350,7 @@ export class EmployeesService {
           const mine = byEmployee.get(e.id) ?? [];
           return {
             ...toView(e),
+            age: ageOn(e.birthDate, today),
             primaryBranchId: mine.find((a) => a.kind === 'PRIMARY')?.branchId ?? null,
             branchIds: [...new Set(mine.map((a) => a.branchId))],
           };
@@ -358,7 +370,7 @@ export class EmployeesService {
         .where(eq(employeeBranchAssignments.employeeId, employeeId))
         .orderBy(asc(employeeBranchAssignments.validFrom));
       const current = await this.branchesOf(tx, employeeId);
-      return { ...toView(e), ...current, hasPin: e.pinHash !== null, assignments: history };
+      return { ...toView(e), age: ageOn(e.birthDate, localDate(this.clock(), 'UTC')), ...current, hasPin: e.pinHash !== null, assignments: history };
     });
   }
 

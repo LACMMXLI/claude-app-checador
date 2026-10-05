@@ -61,6 +61,10 @@ export interface Employee {
   status: 'ACTIVE' | 'INACTIVE';
   primaryBranchId: string | null;
   branchIds: string[];
+  /** D-92: días de descanso semanales (ISO: 1 = lunes … 7 = domingo). */
+  restDays: number[];
+  birthDate: string | null;
+  age: number | null;
 }
 
 export interface Shift {
@@ -93,7 +97,7 @@ export interface Week {
   weekStart: string;
   days: string[];
   schedule: { id: string; status: 'DRAFT' | 'PUBLISHED'; version: number; publishedAt: string | null } | null;
-  employees: { id: string; employeeNumber: string; firstName: string; lastName: string; status: string; temporary: boolean }[];
+  employees: { id: string; employeeNumber: string; firstName: string; lastName: string; status: string; temporary: boolean; restDays: number[]; age: number | null }[];
   shifts: Shift[];
 }
 
